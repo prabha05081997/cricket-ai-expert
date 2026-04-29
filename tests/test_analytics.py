@@ -126,3 +126,46 @@ def test_analytics_service_answers_most_wickets_with_format_filter(tmp_path: Pat
     assert result is not None
     assert "Jasprit Bumrah" in str(result["answer"])
     assert "7 wickets" in str(result["answer"])
+
+
+def test_analytics_service_signals_venue_scope_for_all_matches(tmp_path: Path) -> None:
+    db_path = tmp_path / "registry.sqlite3"
+    Registry(db_path)
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+
+    match = MatchRecord(
+        match_id="match-1",
+        source_file="/tmp/match-1.json",
+        date="2024-01-01",
+        teams=["Middlesex", "Surrey"],
+        gender="male",
+        match_type="MDM",
+        event_name="County Championship",
+        venue="Lord's",
+        city="London",
+        toss_winner="Middlesex",
+        toss_decision="field",
+        outcome="Middlesex won",
+        player_of_match=[],
+        innings=[
+            {
+                "team": "Surrey",
+                "runs": 220,
+                "wickets": 10,
+                "batting": [{"player": "Player A", "runs": 55, "balls": 88, "fours": 4, "sixes": 1}],
+                "bowling": [{"player": "TS Roland-Jones", "runs_conceded": 38, "balls": 90, "wickets": 6}],
+                "wicket_events": [],
+            }
+        ],
+    )
+
+    sync_match_players(connection, match)
+    sync_match_analytics(connection, match)
+    connection.commit()
+
+    service = AnalyticsQueryService(db_path)
+    result = service.answer("Who has the most wickets at Lord's?")
+
+    assert result is not None
+    assert "across all recorded matches at Lord's" in str(result["answer"])

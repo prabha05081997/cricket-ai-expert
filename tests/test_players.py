@@ -3,6 +3,7 @@ from pathlib import Path
 
 from app.analytics.players import (
     generate_player_aliases,
+    get_preferred_player_display_name,
     resolve_player_name,
     sync_external_player_directory,
     sync_match_players,
@@ -133,3 +134,6 @@ def test_sync_external_player_directory_imports_csv_aliases(tmp_path: Path) -> N
     results = resolve_player_name(connection, "Kohli")
     assert results[0].canonical_name == "V Kohli"
     assert results[0].matched_alias.lower() == "kohli"
+
+    display_name = get_preferred_player_display_name(connection, results[0].player_id, "V Kohli")
+    assert display_name == "Virat Kohli"

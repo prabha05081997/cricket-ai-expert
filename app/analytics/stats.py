@@ -5,7 +5,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.analytics.players import upsert_player_identity
+from app.analytics.players import get_preferred_player_display_name, upsert_player_identity
 from app.domain import MatchRecord
 
 
@@ -33,13 +33,14 @@ class AnalyticsQueryService:
                 row = _query_highest_individual_score(connection, parsed)
                 if row is None:
                     return None
+                display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
                 answer = (
                     f"The highest individual score"
-                    f"{_format_filter_suffix(parsed)} is {row['runs']} by {row['player_name']} "
+                    f"{_format_filter_suffix(parsed)} is {row['runs']} by {display_name} "
                     f"for {row['innings_team']} against {row['opposition_team']} on {row['date']}."
                 )
                 source_text = (
-                    f"{row['player_name']} scored {row['runs']} off {row['balls']} balls "
+                    f"{display_name} scored {row['runs']} off {row['balls']} balls "
                     f"for {row['innings_team']} against {row['opposition_team']} in "
                     f"{row['match_type']} on {row['date']} at {row['venue'] or 'unknown venue'}."
                 )
@@ -65,12 +66,13 @@ class AnalyticsQueryService:
                 row = _query_most_runs(connection, parsed)
                 if row is None:
                     return None
+                display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
                 answer = (
                     f"The player with the most runs{_format_filter_suffix(parsed)} is "
-                    f"{row['player_name']} with {row['total_runs']} runs."
+                    f"{display_name} with {row['total_runs']} runs."
                 )
                 source_text = (
-                    f"{row['player_name']} has {row['total_runs']} runs across {row['innings_count']} innings"
+                    f"{display_name} has {row['total_runs']} runs across {row['innings_count']} innings"
                     f"{_format_filter_suffix(parsed)}."
                 )
                 return {
@@ -95,12 +97,13 @@ class AnalyticsQueryService:
                 row = _query_most_wickets(connection, parsed)
                 if row is None:
                     return None
+                display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
                 answer = (
                     f"The player with the most wickets{_format_filter_suffix(parsed)} is "
-                    f"{row['player_name']} with {row['total_wickets']} wickets."
+                    f"{display_name} with {row['total_wickets']} wickets."
                 )
                 source_text = (
-                    f"{row['player_name']} has {row['total_wickets']} wickets in {row['match_count']} matches"
+                    f"{display_name} has {row['total_wickets']} wickets in {row['match_count']} matches"
                     f"{_format_filter_suffix(parsed)}."
                 )
                 return {
@@ -260,7 +263,7 @@ def parse_aggregate_question(question: str) -> AggregateQuery | None:
 
     match_type = _extract_match_type(lowered)
     year_match = re.search(r"\b(19|20)\d{2}\b", lowered)
-    venue_match = re.search(r"\bat\s+([a-z0-9' .-]+?)(?:\?|$|\sin\s|\sfor\s)", lowered)
+    venue_match = re.search(r"\bat\s+([a-z0-9' .-]+?)(?:\?|$|\sin\s|\sfor\s)", question, flags=re.IGNORECASE)
     venue = venue_match.group(1).strip() if venue_match else None
     international_only = "international" in lowered or "icc" in lowered
 
@@ -373,6 +376,9 @@ def _apply_common_filters(
 
 
 def _format_filter_suffix(parsed: AggregateQuery) -> str:
+    if parsed.venue and not parsed.match_type and not parsed.year and not parsed.international_only:
+        return f" across all recorded matches at {parsed.venue}"
+
     parts: list[str] = []
     if parsed.match_type:
         parts.append(parsed.match_type)

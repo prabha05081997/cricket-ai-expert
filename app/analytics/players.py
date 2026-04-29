@@ -44,6 +44,44 @@ def upsert_player_identity(connection: sqlite3.Connection, canonical_name: str) 
     return _upsert_player(connection, canonical_name)
 
 
+def get_preferred_player_display_name(
+    connection: sqlite3.Connection,
+    player_id: int,
+    fallback_name: str | None = None,
+) -> str:
+    row = connection.execute(
+        "SELECT canonical_name FROM players WHERE player_id = ?",
+        (player_id,),
+    ).fetchone()
+    canonical_name = str(row["canonical_name"]) if row is not None else (fallback_name or "Unknown player")
+
+    alias_rows = connection.execute(
+        """
+        SELECT alias, alias_type
+        FROM player_aliases
+        WHERE player_id = ?
+        """,
+        (player_id,),
+    ).fetchall()
+
+    preferred_alias: str = canonical_name
+    preferred_score = -1
+    canonical_score = _display_name_score(canonical_name, "canonical_display")
+    if canonical_score > preferred_score:
+        preferred_alias = canonical_name
+        preferred_score = canonical_score
+
+    for row in alias_rows:
+        alias = str(row["alias"]).strip()
+        alias_type = str(row["alias_type"])
+        score = _display_name_score(alias, alias_type)
+        if score > preferred_score:
+            preferred_alias = alias
+            preferred_score = score
+
+    return preferred_alias
+
+
 def sync_external_player_directory(
     connection: sqlite3.Connection,
     players_data_dir: Path | None,
@@ -157,21 +195,22 @@ def normalize_person_name(name: str) -> str:
 
 
 def generate_player_aliases(canonical_name: str) -> list[tuple[str, str]]:
-    normalized_full_name = normalize_person_name(canonical_name)
+    display_full_name = canonical_name.strip()
+    normalized_full_name = normalize_person_name(display_full_name)
     if not normalized_full_name:
         return []
 
-    parts = normalized_full_name.split()
-    aliases: list[tuple[str, str]] = [("canonical", normalized_full_name)]
+    display_parts = re.sub(r"\s+", " ", display_full_name).split()
+    aliases: list[tuple[str, str]] = [("canonical", display_full_name)]
 
-    if len(parts) >= 2:
-        first_name = parts[0]
-        last_name = parts[-1]
-        initials = "".join(part[0] for part in parts[:-1] if part)
+    if len(display_parts) >= 2:
+        first_name = display_parts[0]
+        last_name = display_parts[-1]
+        initials = "".join(part[0] for part in display_parts[:-1] if part)
 
-        if len(first_name) >= 3:
+        if len(normalize_person_name(first_name)) >= 3:
             aliases.append(("first_name", first_name))
-        if len(last_name) >= 3:
+        if len(normalize_person_name(last_name)) >= 3:
             aliases.append(("last_name", last_name))
         if initials:
             aliases.append(("initials_last_name", f"{initials} {last_name}"))
@@ -306,3 +345,22 @@ def _preferred_canonical_name(
     if len(normalize_person_name(new_name)) > len(normalize_person_name(existing_name)):
         return new_name
     return existing_name
+
+
+def _display_name_score(alias: str, alias_type: str) -> int:
+    normalized = normalize_person_name(alias)
+    if not normalized:
+        return 0
+
+    word_count = len(normalized.split())
+    base = len(normalized)
+    alias_type_bonus = {
+        "external_csv": 200,
+        "canonical_display": 140,
+        "canonical": 100,
+        "initials_last_name": 40,
+        "last_name": 20,
+        "first_name": 10,
+        "initials_compact": 0,
+    }.get(alias_type, 0)
+    return alias_type_bonus + (word_count * 10) + base
