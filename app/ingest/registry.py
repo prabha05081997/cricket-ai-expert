@@ -88,6 +88,79 @@ class Registry:
                 CREATE INDEX IF NOT EXISTS idx_players_normalized_name ON players(normalized_name);
                 CREATE INDEX IF NOT EXISTS idx_player_aliases_normalized_alias ON player_aliases(normalized_alias);
                 CREATE INDEX IF NOT EXISTS idx_match_players_player_id ON match_players(player_id);
+
+                CREATE TABLE IF NOT EXISTS analytics_matches (
+                    match_id TEXT PRIMARY KEY,
+                    date TEXT,
+                    teams_csv TEXT,
+                    gender TEXT,
+                    match_type TEXT,
+                    event_name TEXT,
+                    venue TEXT,
+                    city TEXT,
+                    toss_winner TEXT,
+                    toss_decision TEXT,
+                    outcome TEXT,
+                    player_of_match_csv TEXT,
+                    source_file TEXT,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS analytics_innings (
+                    match_id TEXT NOT NULL,
+                    innings_number INTEGER NOT NULL,
+                    team_name TEXT,
+                    opposition_team TEXT,
+                    runs INTEGER NOT NULL,
+                    wickets INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (match_id, innings_number)
+                );
+
+                CREATE TABLE IF NOT EXISTS batting_performances (
+                    match_id TEXT NOT NULL,
+                    innings_number INTEGER NOT NULL,
+                    player_id INTEGER NOT NULL,
+                    player_name TEXT NOT NULL,
+                    innings_team TEXT,
+                    opposition_team TEXT,
+                    runs INTEGER NOT NULL,
+                    balls INTEGER NOT NULL,
+                    fours INTEGER NOT NULL,
+                    sixes INTEGER NOT NULL,
+                    strike_rate REAL,
+                    match_type TEXT,
+                    date TEXT,
+                    venue TEXT,
+                    event_name TEXT,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS bowling_performances (
+                    match_id TEXT NOT NULL,
+                    innings_number INTEGER NOT NULL,
+                    player_id INTEGER NOT NULL,
+                    player_name TEXT NOT NULL,
+                    bowling_team TEXT,
+                    opposition_team TEXT,
+                    wickets INTEGER NOT NULL,
+                    runs_conceded INTEGER NOT NULL,
+                    balls_bowled INTEGER NOT NULL,
+                    economy REAL,
+                    match_type TEXT,
+                    date TEXT,
+                    venue TEXT,
+                    event_name TEXT,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_analytics_matches_match_type ON analytics_matches(match_type);
+                CREATE INDEX IF NOT EXISTS idx_batting_match_type_runs ON batting_performances(match_type, runs DESC);
+                CREATE INDEX IF NOT EXISTS idx_batting_player_id ON batting_performances(player_id);
+                CREATE INDEX IF NOT EXISTS idx_batting_venue ON batting_performances(venue);
+                CREATE INDEX IF NOT EXISTS idx_bowling_match_type_wickets ON bowling_performances(match_type, wickets DESC);
+                CREATE INDEX IF NOT EXISTS idx_bowling_player_id ON bowling_performances(player_id);
+                CREATE INDEX IF NOT EXISTS idx_bowling_venue ON bowling_performances(venue);
                 """
             )
 
@@ -97,3 +170,19 @@ class Registry:
                 "SELECT * FROM sources WHERE source_file_path = ?",
                 (source_file_path,),
             ).fetchone()
+
+    def has_match_players(self, match_id: str) -> bool:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM match_players WHERE match_id = ? LIMIT 1",
+                (match_id,),
+            ).fetchone()
+        return row is not None
+
+    def has_match_analytics(self, match_id: str) -> bool:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM analytics_matches WHERE match_id = ? LIMIT 1",
+                (match_id,),
+            ).fetchone()
+        return row is not None

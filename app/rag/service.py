@@ -2,16 +2,27 @@ from __future__ import annotations
 
 import re
 
+from app.analytics.stats import AnalyticsQueryService
 from app.rag.index import LocalIndex
 from app.rag.llm import OllamaClient
 
 
 class ChatService:
-    def __init__(self, index: LocalIndex, llm_client: OllamaClient) -> None:
+    def __init__(
+        self,
+        index: LocalIndex,
+        llm_client: OllamaClient,
+        analytics_service: AnalyticsQueryService | None = None,
+    ) -> None:
         self.index = index
         self.llm_client = llm_client
+        self.analytics_service = analytics_service
 
     def answer(self, question: str, top_k: int = 6) -> dict[str, object]:
+        if _looks_like_aggregate_stats_question(question) and self.analytics_service is not None:
+            analytics_answer = self.analytics_service.answer(question)
+            if analytics_answer is not None:
+                return analytics_answer
         if _looks_like_aggregate_stats_question(question):
             return {
                 "answer": (

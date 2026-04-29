@@ -40,6 +40,10 @@ def sync_match_players(connection: sqlite3.Connection, match: MatchRecord) -> No
         )
 
 
+def upsert_player_identity(connection: sqlite3.Connection, canonical_name: str) -> int:
+    return _upsert_player(connection, canonical_name)
+
+
 def sync_external_player_directory(
     connection: sqlite3.Connection,
     players_data_dir: Path | None,
@@ -200,9 +204,31 @@ def _upsert_player(connection: sqlite3.Connection, canonical_name: str) -> int:
             SET canonical_name = ?, updated_at = datetime('now')
             WHERE player_id = ?
             """,
-            (canonical_name, row["player_id"]),
+            (_preferred_canonical_name(connection, int(row["player_id"]), canonical_name), row["player_id"]),
         )
         return int(row["player_id"])
+
+    alias_row = connection.execute(
+        """
+        SELECT p.player_id
+        FROM player_aliases a
+        JOIN players p ON p.player_id = a.player_id
+        WHERE a.normalized_alias = ?
+        LIMIT 1
+        """,
+        (normalized_name,),
+    ).fetchone()
+    if alias_row is not None:
+        player_id = int(alias_row["player_id"])
+        connection.execute(
+            """
+            UPDATE players
+            SET canonical_name = ?, updated_at = datetime('now')
+            WHERE player_id = ?
+            """,
+            (_preferred_canonical_name(connection, player_id, canonical_name), player_id),
+        )
+        return player_id
 
     cursor = connection.execute(
         """
@@ -262,3 +288,21 @@ def _score_alias_match(query: str, alias: str, alias_type: str) -> float:
         "initials_compact": 3.0,
     }
     return base + alias_weights.get(alias_type, 0.0)
+
+
+def _preferred_canonical_name(
+    connection: sqlite3.Connection,
+    player_id: int,
+    new_name: str,
+) -> str:
+    row = connection.execute(
+        "SELECT canonical_name FROM players WHERE player_id = ?",
+        (player_id,),
+    ).fetchone()
+    if row is None:
+        return new_name
+
+    existing_name = str(row["canonical_name"])
+    if len(normalize_person_name(new_name)) > len(normalize_person_name(existing_name)):
+        return new_name
+    return existing_name
