@@ -57,6 +57,37 @@ class Registry:
                 CREATE INDEX IF NOT EXISTS idx_sources_match_id ON sources(match_id);
                 CREATE INDEX IF NOT EXISTS idx_documents_match_id ON documents(match_id);
                 CREATE INDEX IF NOT EXISTS idx_chunks_match_id ON chunks(match_id);
+
+                CREATE TABLE IF NOT EXISTS players (
+                    player_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    canonical_name TEXT NOT NULL,
+                    normalized_name TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS player_aliases (
+                    player_id INTEGER NOT NULL,
+                    alias TEXT NOT NULL,
+                    normalized_alias TEXT NOT NULL,
+                    alias_type TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (player_id, normalized_alias),
+                    FOREIGN KEY (player_id) REFERENCES players(player_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS match_players (
+                    match_id TEXT NOT NULL,
+                    player_id INTEGER NOT NULL,
+                    team_name TEXT,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (match_id, player_id),
+                    FOREIGN KEY (player_id) REFERENCES players(player_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_players_normalized_name ON players(normalized_name);
+                CREATE INDEX IF NOT EXISTS idx_player_aliases_normalized_alias ON player_aliases(normalized_alias);
+                CREATE INDEX IF NOT EXISTS idx_match_players_player_id ON match_players(player_id);
                 """
             )
 
@@ -66,4 +97,3 @@ class Registry:
                 "SELECT * FROM sources WHERE source_file_path = ?",
                 (source_file_path,),
             ).fetchone()
-

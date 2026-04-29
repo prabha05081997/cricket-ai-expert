@@ -5,7 +5,8 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
-from app.domain import Document
+from app.analytics.players import sync_external_player_directory, sync_match_players
+from app.domain import Document, MatchRecord
 from app.ingest.documents import build_documents
 from app.ingest.parser import compute_file_hash, parse_match_file
 from app.ingest.registry import Registry
@@ -27,6 +28,8 @@ class IngestionPipeline:
 
     def update(self) -> dict[str, int]:
         self.settings.validate_data_dir()
+        self.settings.validate_players_data_dir()
+        self._sync_external_player_data()
         seen = 0
         indexed = 0
         skipped = 0
@@ -43,7 +46,7 @@ class IngestionPipeline:
             try:
                 match = parse_match_file(path)
                 documents = build_documents(match)
-                self._replace_match(match.match_id, documents)
+                self._replace_match(match.match_id, documents, match=match)
                 self._record_source(path, match.match_id, file_hash, "indexed", None)
                 indexed += 1
             except Exception as exc:
@@ -76,8 +79,15 @@ class IngestionPipeline:
         )
         return self.update()
 
-    def _replace_match(self, match_id: str, documents: list[Document]) -> None:
+    def _replace_match(
+        self,
+        match_id: str,
+        documents: list[Document],
+        match: MatchRecord | None = None,
+    ) -> None:
         self.index.delete_match(match_id)
+        if match is not None:
+            self._persist_player_identities(match)
         self._persist_documents(documents)
         all_chunks = []
         for document in documents:
@@ -106,6 +116,18 @@ class IngestionPipeline:
             )
             connection.commit()
 
+    def _persist_player_identities(self, match: MatchRecord) -> None:
+        with sqlite3.connect(self.settings.registry_db_path) as connection:
+            connection.row_factory = sqlite3.Row
+            sync_match_players(connection, match)
+            connection.commit()
+
+    def _sync_external_player_data(self) -> None:
+        with sqlite3.connect(self.settings.registry_db_path) as connection:
+            connection.row_factory = sqlite3.Row
+            sync_external_player_directory(connection, self.settings.players_data_dir)
+            connection.commit()
+
     def _record_source(
         self,
         path: Path,
@@ -128,4 +150,3 @@ class IngestionPipeline:
 
 def _timestamp() -> str:
     return datetime.now(UTC).isoformat()
-

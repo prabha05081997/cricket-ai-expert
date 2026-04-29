@@ -5,6 +5,7 @@ Local-first cricket expert chatbot built on top of CricSheet JSON data with a Re
 ## What is included
 
 - external CricSheet dataset support through environment config
+- external player identity CSV support through environment config
 - ingestion CLI with `update` and `rebuild`
 - SQLite registry for tracked files, documents, and chunks
 - Chroma-backed vector indexing with a keyword-search fallback
@@ -15,7 +16,9 @@ Local-first cricket expert chatbot built on top of CricSheet JSON data with a Re
 ## Quick start
 
 1. Create a virtual environment and install dependencies.
-2. Copy `.env.example` to `.env` and confirm `CRICSHEET_DATA_DIR` points to your external CricSheet folder.
+2. Copy `.env.example` to `.env` and confirm:
+   - `CRICSHEET_DATA_DIR` points to your CricSheet JSON folder
+   - `CRICKET_AI_PLAYERS_DATA_DIR` points to your player CSV folder
 3. Start Ollama locally and pull a small model such as `llama3.2:3b`.
 4. Run an initial ingest:
 
@@ -53,4 +56,3 @@ tests/
 - The parser is defensive about CricSheet JSON variations, but the dataset may still surface edge cases we will tighten iteratively.
 - Retrieval currently combines vector search and a lightweight keyword scorer.
 - Aggregate cross-match analytics are not implemented yet; this scaffold is optimized for match lookup and narrative cricket questions first.
-
