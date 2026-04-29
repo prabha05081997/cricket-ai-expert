@@ -3,6 +3,7 @@ from __future__ import annotations
 import streamlit as st
 
 from app.analytics.stats import AnalyticsQueryService
+from app.knowledge.service import KnowledgeService
 from app.rag.index import LocalIndex
 from app.rag.llm import OllamaClient
 from app.rag.service import ChatService
@@ -20,7 +21,8 @@ def get_chat_service() -> ChatService:
     )
     llm = OllamaClient(settings.ollama_base_url, settings.ollama_model)
     analytics = AnalyticsQueryService(settings.registry_db_path)
-    return ChatService(index=index, llm_client=llm, analytics_service=analytics)
+    knowledge = KnowledgeService()
+    return ChatService(index=index, llm_client=llm, analytics_service=analytics, knowledge_service=knowledge)
 
 
 st.set_page_config(page_title="Cricket AI Expert", layout="wide")
