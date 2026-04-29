@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -92,20 +93,34 @@ class LocalIndex:
             connection.commit()
 
     def _keyword_search(self, query: str, top_k: int) -> list[RetrievedChunk]:
-        tokens = [token.lower() for token in query.split() if token.strip()]
+        tokens = _normalize_query_tokens(query)
         if not tokens:
             return []
 
         with sqlite3.connect(self.registry_db_path) as connection:
             connection.row_factory = sqlite3.Row
-            rows = connection.execute(
-                "SELECT chunk_id, content, metadata_json FROM chunks ORDER BY updated_at DESC LIMIT 500"
-            ).fetchall()
+            where_clauses = []
+            params: list[str] = []
+            for token in tokens[:8]:
+                where_clauses.append("lower(content) LIKE ?")
+                params.append(f"%{token}%")
+
+            if not where_clauses:
+                return []
+
+            sql = (
+                "SELECT chunk_id, content, metadata_json "
+                "FROM chunks "
+                f"WHERE {' OR '.join(where_clauses)} "
+                "LIMIT 5000"
+            )
+            rows = connection.execute(sql, params).fetchall()
 
         scored: list[RetrievedChunk] = []
         for row in rows:
             haystack = row["content"].lower()
-            score = sum(haystack.count(token) for token in tokens)
+            metadata = json.loads(row["metadata_json"])
+            score = _score_keyword_match(query, tokens, haystack, metadata)
             if score == 0:
                 continue
             scored.append(
@@ -113,7 +128,7 @@ class LocalIndex:
                     chunk_id=row["chunk_id"],
                     text=row["content"],
                     score=float(score),
-                    metadata=json.loads(row["metadata_json"]),
+                    metadata=metadata,
                 )
             )
         return sorted(scored, key=lambda item: item.score, reverse=True)[:top_k]
@@ -154,3 +169,62 @@ def _sanitize_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
             sanitized[key] = value
     return sanitized
 
+
+def _normalize_query_tokens(query: str) -> list[str]:
+    raw_tokens = re.findall(r"[a-zA-Z0-9]+", query.lower())
+    stopwords = {
+        "the",
+        "is",
+        "in",
+        "a",
+        "an",
+        "of",
+        "what",
+        "who",
+        "it",
+        "match",
+        "score",
+        "scores",
+        "scored",
+        "individual",
+    }
+    return [token for token in raw_tokens if token not in stopwords and len(token) > 1]
+
+
+def _score_keyword_match(
+    query: str,
+    tokens: list[str],
+    haystack: str,
+    metadata: dict[str, Any],
+) -> float:
+    score = 0.0
+
+    for token in tokens:
+        token_hits = haystack.count(token)
+        if token_hits:
+            score += token_hits
+
+        match_type = str(metadata.get("match_type", "")).lower()
+        event_name = str(metadata.get("event_name", "")).lower()
+        teams = str(metadata.get("teams", "")).lower()
+        title = str(metadata.get("title", "")).lower()
+        player_name = str(metadata.get("player_name", "")).lower()
+        metadata_blob = " ".join([match_type, event_name, teams, title, player_name])
+        if token in metadata_blob:
+            score += 3.0
+
+    lowered_query = query.lower()
+    match_type = str(metadata.get("match_type", "")).lower()
+    event_name = str(metadata.get("event_name", "")).lower()
+    document_type = str(metadata.get("document_type", "")).lower()
+
+    if "odi" in lowered_query and match_type in {"odi", "odm"}:
+        score += 8.0
+    if "t20" in lowered_query and "t20" in match_type:
+        score += 8.0
+    if "international" in lowered_query and "international" in event_name:
+        score += 6.0
+    if document_type == "player_performance":
+        score += 2.0
+
+    return score
