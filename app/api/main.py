@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from app.analytics.stats import AnalyticsQueryService
 from fastapi import FastAPI
+from app.knowledge.service import KnowledgeService
 from pydantic import BaseModel
 
 from app.rag.index import LocalIndex
@@ -25,7 +27,9 @@ def _chat_service() -> ChatService:
         embedding_model_name=settings.embedding_model,
     )
     llm = OllamaClient(settings.ollama_base_url, settings.ollama_model)
-    return ChatService(index=index, llm_client=llm)
+    analytics = AnalyticsQueryService(settings.registry_db_path)
+    knowledge = KnowledgeService()
+    return ChatService(index=index, llm_client=llm, analytics_service=analytics, knowledge_service=knowledge)
 
 
 @app.get("/health")
@@ -36,4 +40,3 @@ def health() -> dict[str, str]:
 @app.post("/query")
 def query(request: QueryRequest) -> dict[str, object]:
     return _chat_service().answer(request.question, top_k=request.top_k)
-

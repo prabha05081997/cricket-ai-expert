@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from app.analytics.stats import AnalyticsQueryService
+from app.knowledge.service import KnowledgeService
 from app.rag.index import LocalIndex
 from app.rag.llm import OllamaClient
 from app.rag.service import ChatService
@@ -18,7 +20,9 @@ def get_chat_service() -> ChatService:
         embedding_model_name=settings.embedding_model,
     )
     llm = OllamaClient(settings.ollama_base_url, settings.ollama_model)
-    return ChatService(index=index, llm_client=llm)
+    analytics = AnalyticsQueryService(settings.registry_db_path)
+    knowledge = KnowledgeService()
+    return ChatService(index=index, llm_client=llm, analytics_service=analytics, knowledge_service=knowledge)
 
 
 st.set_page_config(page_title="Cricket AI Expert", layout="wide")
@@ -27,11 +31,14 @@ st.caption("Ask cricket questions grounded in your local CricSheet dataset.")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "conversation_state" not in st.session_state:
+    st.session_state.conversation_state = {}
 
 col1, col2 = st.columns([1, 5])
 with col1:
     if st.button("Clear chat", use_container_width=True):
         st.session_state.messages = []
+        st.session_state.conversation_state = {}
         st.rerun()
 
 for message in st.session_state.messages:
@@ -56,7 +63,10 @@ if question:
 
     with st.chat_message("assistant"):
         with st.spinner("Searching matches and preparing an answer..."):
-            result = get_chat_service().answer(question)
+            result = get_chat_service().answer(
+                question,
+                conversation_state=st.session_state.conversation_state,
+            )
         st.markdown(result["answer"])
         with st.expander("Sources used", expanded=False):
             for source in result["sources"]:
@@ -67,6 +77,8 @@ if question:
                     f"Score: `{source.get('score', 0):.3f}`"
                 )
                 st.write(source["text"])
+
+    st.session_state.conversation_state = result.get("conversation_state", st.session_state.conversation_state)
 
     st.session_state.messages.append(
         {"role": "assistant", "content": result["answer"], "sources": result["sources"]}

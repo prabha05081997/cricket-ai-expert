@@ -1,25 +1,31 @@
-# Project Plan: Free, Maintainable Cricket Expert Chatbot with RAG
+# Project Plan: Local-First Cricket Expert Assistant
 
 ## 1. Project Goal
 
-Build a chat application that behaves like a cricket expert by answering questions from a **local Retrieval-Augmented Generation (RAG)** system built on top of CricSheet match data.
+Build a chat application that feels like a real cricket expert, not a generic chatbot.
 
-The system should:
+The assistant should:
 
-- ingest CricSheet JSON match files from a folder **outside the Git repository**
-- build a searchable knowledge base from those files
-- answer user questions through a chat UI
-- support **incremental updates** when new CricSheet data is added later
-- stay **free of cost** to build, run, and maintain
+- answer naturally in a conversational style
+- understand cricket match questions from CricSheet data
+- answer aggregate records and stat questions reliably
+- explain cricket rules, formats, terminology, and context
+- share useful facts, comparisons, and historical context when relevant
+- stay grounded, transparent, and free to run locally
 
-This is not "training" an LLM in the fine-tuning sense. The practical and free approach is:
+The final product should combine:
 
-- keep the LLM unchanged
-- preprocess cricket data into structured/searchable documents
-- retrieve relevant context at question time
-- prompt the model with that retrieved context
+- **RAG** for match-specific and narrative questions
+- **structured analytics** for cross-match statistics and records
+- **domain knowledge** for rules, formats, and cricket facts
+- **query routing** so each question is answered by the right subsystem
 
-That is the RAG system we should build.
+This is not a fine-tuning project at this stage. The practical path is:
+
+- keep the base LLM unchanged
+- build strong cricket-specific retrieval and analytics layers
+- give the model better context and better tools
+- shape the assistant with stronger prompting, routing, and UI behavior
 
 ---
 
@@ -29,193 +35,210 @@ The CricSheet dataset is stored at:
 
 `/Users/manojprabhakarm/Documents/work/personal/cricket-data/all_json`
 
-This is the correct setup because:
+This remains the correct setup because:
 
 - the dataset is large (`~3.4 GB`)
 - it should not be committed to Git
-- it will change over time as new data is downloaded
+- it will keep changing over time
 
-The application must therefore use a configurable external data path, for example through:
+The app must use a configurable external data path through:
 
 - `.env`
 - environment variables
-- a small local config file ignored by Git
+- or a small ignored local config
 
 Recommended variable:
 
 `CRICSHEET_DATA_DIR=/Users/manojprabhakarm/Documents/work/personal/cricket-data/all_json`
 
-The repo should only contain:
+The repo should contain only:
 
-- application code
-- configuration templates
-- ingestion scripts
+- source code
+- config templates
+- docs
+- tests
 - small local metadata/state files
-- documentation
 
 It should not contain:
 
-- raw CricSheet JSON files
-- downloaded models
-- vector database artifacts if they become large
+- raw CricSheet JSON data
+- large model downloads
+- large vector or analytics artifacts that can be regenerated locally
 
 ---
 
 ## 3. Recommended Free Stack
 
-To keep this practical, maintainable, and free, the recommended stack is:
-
 ### Backend
 
 - **Python**
-- **FastAPI** for the API
-- **Uvicorn** for local serving
+- **FastAPI**
+- **Uvicorn**
 
-### RAG / Retrieval
+### Retrieval / Indexing
 
-- **Custom CricSheet parser** for structured extraction
-- **Sentence Transformers** for embeddings
-- **ChromaDB** for local vector storage
+- **custom CricSheet parser**
+- **Sentence Transformers**
+- **ChromaDB**
+- **SQLite FTS / lightweight keyword retrieval**
+
+### Structured Analytics
+
+- **SQLite** for normalized cricket stats tables
 
 ### LLM Inference
 
-- **Ollama** running a local model
-- Start with a small free model such as:
-  - `phi3:mini`
+- **Ollama**
+- start with:
   - `llama3.2:3b`
-  - another lightweight instruct model supported by Ollama
+  - `phi3:mini`
+- evaluate stronger local models later if needed
 
-### Frontend
+### UI
 
-- **Streamlit** for fastest delivery, simplest deployment, and least maintenance
+- **Streamlit** for version 1 and version 1.5
 
-Alternative:
+### Optional Knowledge Assets
 
-- React + FastAPI if we later want a more polished product UI
-
-For now, Streamlit is the best fit because you said you are new to building this and want the best free, maintainable path.
-It also keeps the architecture simple while still allowing us to separate the app logic cleanly so a future shared web frontend can be added later.
-
-### Scheduling / Updates
-
-- manual command for updates at first
-- optional monthly automation later using:
-  - `cron` on macOS/Linux
-  - Task Scheduler on Windows
+- curated local markdown / JSON knowledge packs for:
+  - rules
+  - formats
+  - terminology
+  - tournaments
+  - iconic facts
 
 ---
 
-## 4. Why This Architecture Fits the Requirements
+## 4. Product Direction After MVP
 
-This architecture is chosen because it is:
+The MVP proved that a simple RAG chat app is not enough for a strong cricket assistant.
 
-- **free**: no paid APIs, vector DBs, or managed hosting required
-- **deployable locally**: works on your own machine
-- **maintainable**: clear separation between ingestion, retrieval, and chat
-- **safe for large data**: dataset remains outside Git
-- **incremental**: new matches can be indexed without rebuilding everything
+What we learned:
 
-Important practical note:
+- match-specific questions are a good fit for retrieval
+- aggregate stat questions are a poor fit for plain RAG
+- the assistant needs explicit question routing
+- the assistant also needs non-CricSheet cricket knowledge
+- response quality depends heavily on document quality, retrieval quality, and prompt discipline
 
-- running the embedding pipeline is realistic on CPU
-- running the chat LLM is also realistic locally with Ollama
-- hosting this fully online for free is much harder if the LLM must also run for free
+So the new direction is:
 
-So the primary target should be:
-
-- **local-first deployment**
-
-Then later we can evaluate:
-
-- local backend + local model + local UI
-- or split deployment options if you want others to use it remotely
-
-Confirmed direction for version 1:
-
-- local-only usage on your machine
-- architecture should remain easy to extend later for multi-user or remote access
+1. keep the existing local-first architecture
+2. strengthen retrieval and metadata filtering
+3. add a structured analytics engine
+4. add curated cricket knowledge beyond match files
+5. add conversational polish so the assistant feels domain-native
 
 ---
 
-## 5. Functional Requirements
+## 5. Expanded Functional Requirements
 
-The system should support:
+The assistant should support these categories of questions:
 
-1. User opens a chat interface.
-2. User asks a cricket question in natural language.
-3. System retrieves relevant match/player/stat documents from the CricSheet-based knowledge base.
-4. System sends retrieved context to the LLM.
-5. LLM answers clearly and, ideally, cites supporting matches/chunks.
-6. Admin/user can run an update command later to add newly downloaded CricSheet files.
+### 5.1 Match Lookup Questions
 
-Examples of supported questions:
+Examples:
 
 - "Who won the 2011 World Cup final?"
-- "How did Virat Kohli perform in ODI chases in 2019?"
-- "Which bowler took the most wickets in matches at Lord's?"
-- "What happened in the final overs of the match between India and Pakistan on a given date?"
+- "What happened in the last five overs of the match?"
+- "How did Virat Kohli perform in that game?"
+
+Best engine:
+
+- RAG over CricSheet-derived documents
+
+### 5.2 Aggregate Statistical Questions
+
+Examples:
+
+- "What is the highest individual score in ODI internationals?"
+- "Who has the most wickets at Lord's?"
+- "Which batter scored the most T20I runs in 2021?"
+
+Best engine:
+
+- structured analytics over normalized tables
+
+### 5.3 Rules and Cricket Knowledge Questions
+
+Examples:
+
+- "What is the Duckworth-Lewis-Stern method?"
+- "What is a powerplay in ODI cricket?"
+- "What is the difference between a no-ball and a wide?"
+
+Best engine:
+
+- curated cricket knowledge base, optionally with lightweight RAG
+
+### 5.4 Mixed Questions
+
+Examples:
+
+- "Why is Rohit Sharma's double century in ODI cricket special?"
+- "How does a strike rate of 140 compare in T20 internationals?"
+
+Best engine:
+
+- query routing plus answer synthesis from multiple sources
+
+### 5.5 Conversational Support
+
+The assistant should also:
+
+- ask clarifying questions when the user is ambiguous
+- remember recent chat context within the current session
+- adapt tone to the question type
+- explain uncertainty honestly
+- optionally add "interesting context" only when helpful
 
 ---
 
 ## 6. Non-Functional Requirements
 
-- Must be **free of cost**
-- Must be **reasonably fast on consumer hardware**
-- Must be **easy to rerun and update**
+- Must remain **free of cost**
+- Must run **locally on consumer hardware**
+- Must be **incrementally updateable**
 - Must be **robust to CricSheet JSON variations**
-- Must be **easy to deploy locally**
-- Must avoid storing large generated artifacts in Git
+- Must avoid **hallucinated stats**
+- Must be **explainable** about where answers came from
+- Must feel **fast enough for interactive use**
+- Must feel **more like a cricket analyst than a generic assistant**
 
 ---
 
-## 7. Data Source and Ingestion Strategy
+## 7. Data Sources
 
-### 7.1 Data Source
+### 7.1 Primary Data Source
 
-Source: CricSheet JSON files from:
+CricSheet JSON files from:
 
 `/Users/manojprabhakarm/Documents/work/personal/cricket-data/all_json`
 
-Expected characteristics:
+### 7.2 Secondary Knowledge Sources
 
-- thousands of JSON files
-- each file represents one match
-- metadata plus innings/ball-by-ball detail
-- structure may vary slightly across formats and years
+To make the assistant more complete, we should add a small local knowledge layer for:
 
-### 7.2 External Data Policy
+- laws and rules of cricket
+- match formats and tournament structures
+- common cricket terms and jargon
+- special methods such as DLS
+- major historical cricket facts and landmarks
 
-The ingestion pipeline must read from the external dataset path and must not assume the data is inside the repo.
+Important note:
 
-We should add:
+- CricSheet is excellent for match data
+- CricSheet alone is not enough for full cricket knowledge
 
-- `.gitignore` entries for local artifacts
-- `.env.example` with the dataset path variable name only
-- startup validation that fails with a friendly message if the directory does not exist
+### 7.3 External Data Policy
 
-### 7.3 File Tracking
-
-To support updates efficiently, maintain an ingestion registry in SQLite with fields like:
-
-- `match_id`
-- `source_file_path`
-- `file_hash`
-- `last_indexed_at`
-- `status`
-
-This allows us to:
-
-- skip unchanged files
-- detect new files
-- re-index only changed files
+The system should continue to support external dataset paths and keep all large source data outside Git.
 
 ---
 
-## 8. Parsing and Knowledge Construction
+## 8. Parsing, Normalization, and Knowledge Construction
 
-Raw CricSheet JSON is rich but not ideal for direct retrieval. We should convert each match into structured intermediate data first, then produce retrieval-friendly documents.
-
-### 8.1 Structured Extraction Per Match
+### 8.1 Structured Match Extraction
 
 Extract:
 
@@ -233,293 +256,283 @@ Extract:
 - innings totals
 - batting scorecards
 - bowling figures
-- wickets timeline
-- notable partnerships
-- notable events if derivable
+- wicket events
+- over-level summaries where useful
 
-### 8.2 Documents to Generate
+### 8.2 Edge Cases To Support
 
-Each match should generate multiple document types instead of one huge blob:
+The parser should explicitly support:
 
-1. **Match summary document**
-2. **Innings summary document** for each innings
-3. **Player performance document** for each significant player in the match
-4. **Event timeline document** for notable moments
-5. Optional later: **ball-over summaries** instead of full ball-by-ball chunks
+- standard innings structures
+- older wrapped innings structures
+- forfeited matches
+- no-result / abandoned matches
+- super overs if present
+- missing optional fields
 
-This is important because pure ball-by-ball ingestion for all matches may create too much noisy context and unnecessarily large storage.
+### 8.3 Documents To Generate
 
-### 8.3 Recommended Retrieval Granularity
+Each match should generate multiple retrieval-friendly documents:
 
-For version 1:
+1. **match summary**
+2. **innings summary**
+3. **player performance summary**
+4. **wicket timeline summary**
+5. later: **death overs summary**
+6. later: **over-level event summary**
 
-- prioritize match summaries
-- innings summaries
-- player performance summaries
+### 8.4 Analytics Tables To Build
 
-Avoid storing every ball as a standalone chunk initially. That would bloat the index and reduce retrieval quality for general questions.
+Alongside the RAG documents, build normalized SQLite tables such as:
 
-If needed later, we can selectively support:
-
-- over-level summaries
-- death overs summaries
-- wicket-event summaries
-
----
-
-## 9. Chunking Strategy
-
-Use chunking only after generating clean cricket-focused text documents.
-
-Recommended strategy:
-
-- chunk size around `600-900` characters or equivalent token-aware size
-- overlap around `80-120` characters when needed
-- preserve document boundaries
-- include rich metadata on every chunk
-
-Metadata per chunk should include:
-
-- `match_id`
-- `date`
-- `teams`
+- `matches`
+- `innings`
+- `batting_performances`
+- `bowling_performances`
 - `players`
-- `venue`
-- `match_type`
-- `event_name`
-- `document_type`
-- `source_file`
+- `venues`
+- `teams`
 
-This metadata is critical for both filtering and source display in the UI.
+Likely later additions:
 
----
+- `partnerships`
+- `dismissals`
+- `overs`
+- `tournaments`
 
-## 10. Embedding and Vector Storage
+### 8.5 Player Identity and Alias Resolution
 
-### 10.1 Embedding Model
+The assistant should build a player identity layer so users do not need to type exact full names.
 
-Recommended first choice:
+This layer should support:
 
-- `sentence-transformers/all-MiniLM-L6-v2`
+- canonical player records
+- full-name matching
+- first-name-only matching where safe
+- last-name-only matching where safe
+- initials such as `V Kohli` or `MS Dhoni`
+- common short references and spelling variants
+- disambiguation when multiple players match the same reference
 
-Reasons:
+This is important for both:
 
-- free
-- lightweight
-- works on CPU
-- simple to deploy
-
-Possible upgrade later:
-
-- `BAAI/bge-small-en-v1.5`
-
-### 10.2 Vector Database
-
-Recommended:
-
-- **ChromaDB**
-
-Reasons:
-
-- free and local
-- simple Python integration
-- supports metadata storage
-- good enough for this scale
-
-Storage location should be outside Git, for example:
-
-- `./storage/chroma` if you are okay with local generated artifacts in the repo folder but ignored
-- or a separate local data directory such as `~/Library/Application Support/cricket-llm/`
-
-For simplicity in development:
-
-- use a repo-local `storage/` directory
-- add it to `.gitignore`
+- conversational questions such as "How did Kohli do?"
+- analytics queries where player references must be resolved reliably
 
 ---
 
-## 11. Retrieval Pipeline
+## 9. Retrieval and Query Routing Strategy
 
-### 11.1 Base Retrieval Flow
+### 9.1 Retrieval Stack
 
-1. User enters a question.
-2. System normalizes the question.
-3. System embeds the question.
-4. Vector DB retrieves top candidate chunks.
-5. Optional metadata filtering or reranking is applied.
-6. Retrieved chunks are passed to the LLM.
-7. Final answer is generated with cited sources.
+Use:
 
-### 11.2 Important Improvement: Hybrid Retrieval
+- vector retrieval
+- keyword retrieval
+- metadata filtering
+- reranking / scoring heuristics
 
-Pure vector search may miss exact stat-style questions. A stronger free approach is:
+### 9.2 Metadata Filtering
 
-- semantic search via embeddings
-- keyword search via SQLite FTS or simple BM25
-- merge results
+Important filters should include:
 
-This is strongly recommended because cricket questions often include:
+- match type
+- gender
+- event / tournament
+- date / year
+- venue
+- team
+- player
+- international vs domestic signals where derivable
 
-- exact player names
-- exact teams
-- exact venues
-- exact tournaments
-- exact years/dates
+### 9.3 Query Routing
 
-So the ideal version 1.5 architecture is:
+Before answering, classify the question into one of:
 
-- **vector retrieval + metadata filtering + lightweight keyword retrieval**
+1. **match narrative**
+2. **player-in-match**
+3. **aggregate statistics**
+4. **rules / knowledge**
+5. **mixed / comparison**
+6. **unsupported / ambiguous**
 
-### 11.3 Guardrails
+Recommended behavior:
 
-The model should be instructed:
+- match narrative -> RAG
+- aggregate stats -> analytics
+- rules / knowledge -> curated knowledge
+- mixed -> combine multiple sources
 
-- answer only from provided context
-- say when the answer is not supported by retrieved evidence
-- avoid inventing statistics
-- mention source match/date when relevant
+### 9.4 Guardrails
+
+The assistant must:
+
+- not invent unsupported records
+- refuse unsupported stats cleanly
+- expose supporting sources when possible
+- prefer a short truthful answer over a confident wrong one
 
 ---
 
-## 12. LLM Strategy
+## 10. Conversational Design
 
-Use a local Ollama-served model for answer generation.
+The assistant should not sound like a generic chatbot.
 
-Recommended starting models:
+It should behave like a cricket-savvy human expert who:
 
-- `phi3:mini`
-- `llama3.2:3b`
+- answers directly first
+- explains naturally
+- knows when to add context
+- avoids robotic repetition
+- can switch between concise and detailed responses
 
-Selection criteria:
-
-- acceptable CPU performance
-- modest RAM usage
-- decent instruction following
-
-Given your machine has **18 GB RAM**, this is a comfortable fit for a local-first setup.
-We should still start with a small reliable model for responsiveness, then evaluate a slightly stronger model later if needed.
-
-Prompting should include:
-
-- system role: cricket expert assistant grounded in retrieved context
-- strict instruction not to hallucinate unsupported facts
-- concise answer formatting
-- source-aware answer style
-
-Example answer style:
+Desired answer qualities:
 
 - direct answer first
-- short explanation second
-- source section last
+- natural explanatory style
+- grounded evidence where relevant
+- optional "why this matters" context
+- optional "fun fact" or notable comparison when relevant and supported
+
+The assistant should also support:
+
+- short follow-up questions
+- context carry-over inside a chat session
+- conversational references like "that match", "that player", "last answer"
 
 ---
 
-## 13. Chat Interface
+## 11. LLM Strategy
 
-### 13.1 Recommended Version 1
+Use Ollama-served local models for answer generation.
 
-Use **Streamlit** for the first release.
+### 11.1 Near-Term Model Strategy
 
-UI should include:
+Start with small reliable local models, but evaluate stronger options for better reasoning and style.
 
-- chat history
-- text input
-- clear chat button
-- expandable "Sources used" section
-- optional debug view for retrieved chunks
+Candidate models:
 
-### 13.2 Why Streamlit First
+- `llama3.2:3b`
+- `phi3:mini`
+- stronger local models later if your hardware supports them
 
-- lowest implementation complexity
-- easy local deployment
-- easy to demo
-- fewer moving parts than React
+### 11.2 Prompting Strategy
 
-Confirmed recommendation:
+Prompts should vary by route:
 
-- version 1 should use **Streamlit**
-- the backend logic should be written in reusable Python modules so a future shared UI or API can be added without rewriting the RAG pipeline
+- match-summary prompt
+- stat-answer prompt
+- rules-explainer prompt
+- mixed-answer synthesis prompt
 
-If the product later needs:
+Each prompt should enforce:
 
-- authentication
-- multi-user access
-- richer UX
+- truthfulness
+- route-specific formatting
+- no invented stats
+- concise direct answers first
 
-then we can move to:
+### 11.3 Future Improvement Direction
 
-- React frontend
-- FastAPI backend
+To improve NLP quality without expensive fine-tuning:
 
----
-
-## 14. Update Strategy for New Data
-
-The RAG system must support periodic updates without rebuilding everything from scratch.
-
-### 14.1 Update Command
-
-Provide a command such as:
-
-`python -m app.ingest update`
-
-It should:
-
-- scan the external CricSheet folder
-- detect new or changed JSON files
-- parse only those files
-- generate documents and chunks
-- embed and append them to the vector store
-- update the ingestion registry
-
-### 14.2 Rebuild Command
-
-Also provide a full rebuild command:
-
-`python -m app.ingest rebuild`
-
-This is useful if:
-
-- schema changes
-- embedding model changes
-- vector DB corruption
-- document generation strategy changes
-
-### 14.3 Scheduling
-
-For maintainability, start with a manual update flow.
-
-Later, add optional monthly automation through OS schedulers if needed.
-
-### 14.4 Recommended Update Path
-
-Recommended for version 1:
-
-- **manual updates**
-
-Reason:
-
-- simpler to build
-- easier to debug
-- safer while the ingestion pipeline is still evolving
-
-Planned later version:
-
-- **automated monthly updates**
-
-This should be added only after the ingestion and indexing flow is stable.
+- use better route-specific prompts
+- improve retrieval precision
+- improve document quality
+- add clarifying-question behavior
+- add conversation memory for the active session
 
 ---
 
-## 15. Proposed Repository Structure
+## 12. UI and Experience Direction
+
+### 12.1 Current UI
+
+Continue with Streamlit for now.
+
+### 12.2 Next UI Improvements
+
+Add:
+
+- visible answer type, such as `Match Answer`, `Stats Answer`, `Rules Answer`
+- better source display
+- retrieval debug mode
+- follow-up question suggestions
+- quick example prompts by category
+- optional "why this answer" inspector
+
+### 12.3 UX Goal
+
+The UI should make it obvious that the assistant is:
+
+- cricket-specific
+- evidence-aware
+- able to handle different question types differently
+
+---
+
+## 13. Update and Maintenance Strategy
+
+### 13.1 Keep Existing Commands
+
+- `python -m app.ingest update`
+- `python -m app.ingest rebuild`
+
+### 13.2 Improve Operational Visibility
+
+Add:
+
+- progress logging
+- counts by indexed / skipped / failed
+- failure-report command
+- resumable behavior documentation
+
+### 13.3 Add Analytics Rebuild Support
+
+We will also need:
+
+- analytics rebuild support
+- analytics incremental update support
+
+### 13.4 Deployment Modes
+
+The project should explicitly support three deployment modes:
+
+1. **local full version**
+   - full dataset
+   - full analytics
+   - local Ollama
+   - best quality and most realistic free mode
+
+2. **lightweight public demo**
+   - reduced dataset or curated subset
+   - lighter model or remote inference alternative if ever allowed
+   - simplified feature set
+   - acceptable for demos, but not equivalent to the full assistant
+
+3. **future shared hosted version**
+   - intended for multi-user access
+   - may require paid infrastructure
+   - not a guaranteed zero-cost path
+
+Important constraint:
+
+- the refined plan is ideal for local-first use
+- truly free long-term public hosting for the full assistant is unlikely without major tradeoffs
+
+---
+
+## 14. Recommended Repository Structure
 
 ```text
-cricket-llm/
+cricket-ai-expert/
   app/
+    analytics/
     api/
-    chat/
     ingest/
+    knowledge/
     rag/
+    routing/
     settings/
     ui/
   storage/
@@ -530,220 +543,194 @@ cricket-llm/
   plan.md
 ```
 
-Suggested module responsibilities:
+Suggested additional module responsibilities:
 
-- `app/settings/`: configuration loading
-- `app/ingest/`: file discovery, parsing, document generation, indexing
-- `app/rag/`: retrieval, prompting, LLM orchestration
-- `app/ui/`: Streamlit app
-- `app/api/`: optional FastAPI endpoints if needed
-- `storage/`: ignored local artifacts like SQLite registry and Chroma data
+- `app/analytics/`: structured stats schema, loaders, query engine
+- `app/knowledge/`: curated cricket rules, facts, and terminology assets
+- `app/routing/`: classify question type and dispatch to the right subsystem
 
 ---
 
-## 16. Deployment Strategy
+## 15. Risks and Practical Limits
 
-### 16.1 Primary Deployment Target
+### 15.1 RAG Alone Is Not Enough
 
-Local deployment on your own machine.
+This is now confirmed.
 
-This is the most realistic fully free option because:
+RAG is strong for:
 
-- the data is large
-- the vector store can be large
-- the LLM must run somewhere
-- free hosted environments usually have low disk/RAM limits
+- match lookup
+- narrative explanations
+- player-in-match summaries
 
-Design constraint for future expansion:
+RAG is weak for:
 
-- keep retrieval and generation logic separate from the UI
-- make configuration environment-driven
-- ensure the app can later expose API endpoints for remote/shared access
+- global records
+- top-N stats
+- aggregate comparisons
 
-### 16.2 Local Run Model
+### 15.2 Small Local Models Still Need Help
 
-Expected local services:
-
-- Ollama running locally
-- Streamlit app running locally
-- Chroma persisted locally
-
-### 16.3 Optional Future Remote Access
-
-If you later want remote users, we should revisit the design because "fully free" remote hosting with local LLM inference is usually not sustainable at production quality.
-
----
-
-## 17. Risks and Practical Limits
-
-### 17.1 Large-Scale Ball-by-Ball Indexing
-
-If every delivery from every match is embedded, storage and retrieval noise may become a problem.
+Even good local models can hallucinate when retrieval is weak or the task requires computation.
 
 Mitigation:
 
-- start with summaries
-- add deeper event indexing only where necessary
+- route better
+- compute stats explicitly
+- use stronger prompts
+- expose evidence
 
-### 17.2 Local LLM Accuracy
+### 15.3 Domain Knowledge Gaps
 
-Small local models may sometimes answer less cleanly than premium hosted models.
+CricSheet does not contain everything needed for a full cricket expert persona.
 
 Mitigation:
 
-- strong retrieval
-- structured documents
-- strict prompt grounding
-- source display in UI
+- add a small curated knowledge layer
+- clearly separate data-derived facts from general cricket knowledge
 
-### 17.3 Stat Questions May Need More Than RAG
+### 15.4 Evaluation Is Essential
 
-Some questions are better answered by computed statistics than by retrieval alone, such as:
+If we do not measure answer quality, the assistant will feel inconsistent.
 
-- "Who scored the most ODI runs in 2019?"
-- "Which bowler has the best economy at this venue?"
+Mitigation:
 
-RAG alone is not the best engine for these.
-
-Best long-term design:
-
-- **RAG for narrative / context-heavy questions**
-- **structured analytics layer** for aggregate statistical queries
-
-This is an important architecture point. If we ignore it, some cricket questions will be weaker than they should be.
-
-Confirmed product recommendation:
-
-- version 1 should prioritize:
-  - player/match lookup questions
-  - narrative/match explanation questions
-- later versions should add:
-  - aggregate statistics across many matches
-  - query routing between RAG and structured analytics
-
-### 17.4 Recommended Design Extension
-
-Alongside the vector DB, we should strongly consider building a small SQLite analytics database with normalized tables such as:
-
-- matches
-- innings
-- batting_performances
-- bowling_performances
-- players
-
-Then the app can later support:
-
-- retrieval-based answers
-- SQL/stat-based answers
-- or a hybrid approach
-
-This would make the system much more powerful for cricket expertise.
+- build a question benchmark set
+- test each route separately
+- compare answer quality before and after changes
 
 ---
 
-## 18. Recommended Build Phases
+## 16. Recommended Build Phases Going Forward
 
-### Phase 1: Foundation
+### Phase 1: MVP Stabilization
 
-- create project structure
-- add config management
-- wire external dataset path
-- set up `.gitignore`
-- define storage paths
+- fix parser edge cases such as forfeited matches
+- improve retrieval filters and ranking
+- improve prompt discipline
+- add progress and failure reporting
 
-### Phase 2: Ingestion MVP
+### Phase 2: Structured Analytics Layer
 
-- parse CricSheet JSON safely
-- generate match and player summary documents
-- store ingestion registry in SQLite
+- build normalized SQLite analytics schema
+- load batting and bowling performances
+- implement aggregate stat queries
+- support records by format, year, venue, player, and team
 
-### Phase 3: RAG MVP
+### Phase 3: Query Routing
 
-- chunk documents
-- embed documents
-- build Chroma index
-- implement retrieval pipeline
+- detect question type
+- route to RAG, analytics, knowledge, or mixed mode
+- return route-aware answer formats
 
-### Phase 4: Chat MVP
+### Phase 4: Cricket Knowledge Layer
 
-- connect retrieval to Ollama
-- build Streamlit chat interface
-- show sources
+- add curated rules / glossary / formats knowledge
+- support rules questions and terminology explanations
+- support lightweight fun facts and historical context
 
-### Phase 5: Updates and Hardening
+### Phase 5: Conversational Intelligence
 
-- incremental update command
-- rebuild command
-- logging
-- tests
-- better answer formatting
-- manual monthly update workflow
-- documentation for update usage
+- add session memory
+- support follow-up references
+- add clarification behavior for ambiguous questions
+- improve natural answer style
 
-### Phase 6: Smart Cricket Q&A
+### Phase 6: Quality and Evaluation
 
-- add structured stats database
-- route aggregate/stat questions to analytics
-- keep RAG for descriptive questions
-- prepare API layer for future shared access
+- create benchmark cricket questions by category
+- measure route accuracy and failure modes
+- tune prompts, retrieval, and analytics queries
 
----
+### Phase 7: Product Polish
 
-## 19. What I Would Recommend Building First
-
-To give you the best chance of success, I recommend we build:
-
-1. local-only MVP
-2. external dataset path support
-3. Chroma-based RAG over generated cricket summaries
-4. Ollama-based answer generation
-5. Streamlit chat UI
-6. incremental update command
-
-Then, after the MVP works:
-
-7. add SQLite-based structured statistics for stronger cricket answers
-8. add API and deployment support for shared access
-
-This gives you something usable sooner without overengineering the first version.
+- better UI explanations
+- richer source display
+- answer route badges
+- optional API improvements
 
 ---
 
-## 20. Clarifications Still Needed Before Implementation
+## 17. Recommended Immediate Build Order
 
-These were the key decisions needed before implementation:
+From here, the best sequence is:
 
-1. **Local-only vs shared use**
-   Decision: version 1 will be local-only, but the architecture should be extendable for shared access later.
+1. **analytics layer**
+2. **query routing**
+3. **knowledge layer**
+4. **conversation memory and follow-ups**
+5. **evaluation harness**
+6. **UI polish**
 
-2. **Mac machine capability**
-   Decision: machine has 18 GB RAM, which is sufficient for a strong local-first MVP.
+Reason:
 
-3. **Question type priority**
-   Decision: version 1 should prioritize player/match lookup and narrative explanation questions.
-   Aggregate cross-match statistics should be planned for later versions via a structured analytics layer.
-
-4. **UI preference**
-   Decision: use Streamlit for version 1.
-
-5. **Update preference**
-   Pending explanation and final selection:
-   - manual updates first is recommended for version 1
-   - automated updates can be added after the ingestion flow is stable
+- analytics fixes the biggest functional gap first
+- routing makes the assistant more truthful
+- knowledge layer makes it feel like a real cricket expert
+- memory and follow-ups make it feel more human
 
 ---
 
-## 21. Final Recommendation
+## 18. Important Features Beyond the Original MVP
 
-The best free and maintainable path is:
+To make the assistant more effective and less generic, add these capabilities:
 
-- keep CricSheet files outside Git
-- build a Python-based ingestion pipeline
-- generate cricket-aware summary documents
-- store embeddings in Chroma
-- use Ollama for a local free LLM
-- expose the system through Streamlit
-- support incremental updates with a tracked ingestion registry
-- later add a structured stats database for stronger cricket analytics
+### 18.1 Must-Have
 
-This gives us a realistic path to a cricket expert assistant without paid infrastructure.
+- structured stats engine
+- query routing
+- route-aware prompts
+- curated cricket rules and terminology knowledge
+- session memory for follow-ups
+- player identity and alias resolution
+
+### 18.2 High-Value Nice-To-Have
+
+- interesting contextual add-ons such as:
+  - "why this is notable"
+  - "similar record"
+  - "historical context"
+- player/team disambiguation
+- answer confidence / support level
+- suggested follow-up questions
+
+### 18.3 Later Ideas
+
+- voice-friendly answer mode
+- tournament summaries
+- rivalry summaries
+- richer player profile pages
+- visual stat cards / charts
+
+---
+
+## 19. What Version 2 Should Feel Like
+
+Version 2 should feel like:
+
+- a cricket analyst
+- a commentator when asked for narrative
+- a stats desk when asked for records
+- a friendly explainer when asked about rules or basics
+
+It should not feel like:
+
+- a generic chatbot with random cricket words
+- an assistant that guesses stats from partial evidence
+- a tool that answers everything the same way
+
+---
+
+## 20. Final Recommendation
+
+The right path now is:
+
+- keep the local-first architecture
+- keep RAG for match and narrative questions
+- add a structured analytics engine for record/stat questions
+- add a curated cricket knowledge layer for rules and facts
+- add query routing so the model stops using the wrong tool
+- add conversational memory and stronger prompts so the assistant feels natural
+- evaluate systematically so answer quality improves with each phase
+
+This is the path that turns the current MVP into a true cricket expert assistant.
