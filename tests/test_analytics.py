@@ -169,3 +169,86 @@ def test_analytics_service_signals_venue_scope_for_all_matches(tmp_path: Path) -
 
     assert result is not None
     assert "across all recorded matches at Lord's" in str(result["answer"])
+
+
+def test_analytics_service_answers_player_performance_in_specific_final(tmp_path: Path) -> None:
+    db_path = tmp_path / "registry.sqlite3"
+    Registry(db_path)
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+
+    final_match = MatchRecord(
+        match_id="final-2011",
+        source_file="/tmp/final-2011.json",
+        date="2011-04-02",
+        teams=["India", "Sri Lanka"],
+        gender="male",
+        match_type="ODI",
+        event_name="ICC Cricket World Cup",
+        venue="Wankhede Stadium",
+        city="Mumbai",
+        toss_winner="Sri Lanka",
+        toss_decision="bat",
+        outcome="India won by 6 wickets",
+        player_of_match=["MS Dhoni"],
+        innings=[
+            {
+                "team": "Sri Lanka",
+                "runs": 274,
+                "wickets": 6,
+                "batting": [{"player": "DPMD Jayawardene", "runs": 103, "balls": 90, "fours": 13, "sixes": 0}],
+                "bowling": [{"player": "Yuvraj Singh", "runs_conceded": 49, "balls": 60, "wickets": 2}],
+                "wicket_events": [],
+            },
+            {
+                "team": "India",
+                "runs": 277,
+                "wickets": 4,
+                "batting": [
+                    {"player": "MS Dhoni", "runs": 91, "balls": 80, "fours": 8, "sixes": 2},
+                    {"player": "V Kohli", "runs": 35, "balls": 52, "fours": 4, "sixes": 0},
+                ],
+                "bowling": [{"player": "V Kohli", "runs_conceded": 6, "balls": 6, "wickets": 0}],
+                "wicket_events": [],
+            },
+        ],
+    )
+    league_match = MatchRecord(
+        match_id="league-2011",
+        source_file="/tmp/league-2011.json",
+        date="2011-02-27",
+        teams=["India", "England"],
+        gender="male",
+        match_type="ODI",
+        event_name="ICC Cricket World Cup",
+        venue="M Chinnaswamy Stadium",
+        city="Bengaluru",
+        toss_winner="India",
+        toss_decision="bat",
+        outcome="Match tied",
+        player_of_match=[],
+        innings=[
+            {
+                "team": "India",
+                "runs": 338,
+                "wickets": 10,
+                "batting": [{"player": "MS Dhoni", "runs": 31, "balls": 25, "fours": 3, "sixes": 1}],
+                "bowling": [],
+                "wicket_events": [],
+            }
+        ],
+    )
+
+    for match in [final_match, league_match]:
+        sync_match_players(connection, match)
+        sync_match_analytics(connection, match)
+    connection.commit()
+
+    service = AnalyticsQueryService(db_path)
+    kohli_result = service.answer("How did Virat Kohli do in the 2011 World Cup final?")
+    dhoni_result = service.answer("How did MS Dhoni do in the 2011 World Cup final?")
+
+    assert kohli_result is not None
+    assert "Virat Kohli scored 35 runs off 52 balls" in str(kohli_result["answer"])
+    assert dhoni_result is not None
+    assert "91 runs off 80 balls" in str(dhoni_result["answer"])

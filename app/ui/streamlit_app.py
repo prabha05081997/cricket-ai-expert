@@ -31,11 +31,14 @@ st.caption("Ask cricket questions grounded in your local CricSheet dataset.")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "conversation_state" not in st.session_state:
+    st.session_state.conversation_state = {}
 
 col1, col2 = st.columns([1, 5])
 with col1:
     if st.button("Clear chat", use_container_width=True):
         st.session_state.messages = []
+        st.session_state.conversation_state = {}
         st.rerun()
 
 for message in st.session_state.messages:
@@ -60,7 +63,10 @@ if question:
 
     with st.chat_message("assistant"):
         with st.spinner("Searching matches and preparing an answer..."):
-            result = get_chat_service().answer(question)
+            result = get_chat_service().answer(
+                question,
+                conversation_state=st.session_state.conversation_state,
+            )
         st.markdown(result["answer"])
         with st.expander("Sources used", expanded=False):
             for source in result["sources"]:
@@ -71,6 +77,8 @@ if question:
                     f"Score: `{source.get('score', 0):.3f}`"
                 )
                 st.write(source["text"])
+
+    st.session_state.conversation_state = result.get("conversation_state", st.session_state.conversation_state)
 
     st.session_state.messages.append(
         {"role": "assistant", "content": result["answer"], "sources": result["sources"]}

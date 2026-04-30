@@ -18,6 +18,7 @@ class KnowledgeService:
                     "score": 1.0,
                     "text": item["content"],
                     "title": item["title"],
+                    "knowledge_id": item["id"],
                     "document_type": "knowledge_entry",
                     "match_id": "",
                     "date": "",
@@ -93,4 +94,3 @@ def _normalize_tokens(text: str) -> list[str]:
     raw = re.findall(r"[a-zA-Z0-9]+", text.lower())
     stopwords = {"what", "is", "the", "a", "an", "of", "in", "does", "how", "between", "explain"}
     return [token for token in raw if token not in stopwords]
-
