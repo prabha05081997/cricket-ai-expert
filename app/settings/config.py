@@ -18,7 +18,8 @@ class Settings(BaseSettings):
         alias="CRICKET_AI_EMBEDDING_MODEL",
     )
     chroma_collection: str = Field(default="cricsheet_chunks", alias="CRICKET_AI_CHROMA_COLLECTION")
-    ollama_model: str = Field(default="llama3.2:3b", alias="CRICKET_AI_OLLAMA_MODEL")
+    ollama_model: str = Field(default="qwen2.5:14b", alias="CRICKET_AI_OLLAMA_MODEL")
+    ollama_intent_model: str = Field(default="qwen2.5:7b", alias="CRICKET_AI_OLLAMA_INTENT_MODEL")
     ollama_base_url: str = Field(default="http://localhost:11434", alias="CRICKET_AI_OLLAMA_BASE_URL")
     top_k: int = 6
 

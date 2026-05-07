@@ -20,7 +20,11 @@ def get_chat_service() -> ChatService:
         embedding_model_name=settings.embedding_model,
     )
     llm = OllamaClient(settings.ollama_base_url, settings.ollama_model)
-    analytics = AnalyticsQueryService(settings.registry_db_path)
+    analytics = AnalyticsQueryService(
+        settings.registry_db_path,
+        ollama_base_url=settings.ollama_base_url,
+        ollama_model=settings.ollama_intent_model,
+    )
     knowledge = KnowledgeService()
     return ChatService(index=index, llm_client=llm, analytics_service=analytics, knowledge_service=knowledge)
 

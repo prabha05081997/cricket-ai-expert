@@ -1,4 +1,4 @@
-from app.knowledge.service import KnowledgeService, looks_like_knowledge_question
+from app.knowledge.service import KnowledgeService
 
 
 def test_knowledge_service_answers_dls_question() -> None:
@@ -17,7 +17,8 @@ def test_knowledge_service_picks_odi_powerplay() -> None:
     assert "first 10 overs" in result["answer"]
 
 
-def test_looks_like_knowledge_question() -> None:
-    assert looks_like_knowledge_question("What is LBW in cricket?")
-    assert looks_like_knowledge_question("Explain the difference between a no-ball and a wide")
-    assert not looks_like_knowledge_question("Who won the 2011 World Cup final?")
+def test_knowledge_service_returns_none_for_non_cricket_question() -> None:
+    service = KnowledgeService()
+    # A question with no tokens matching any knowledge item should return None
+    result = service.retrieve("xyzzy frobble wibble")
+    assert result is None

@@ -154,6 +154,28 @@ class Registry:
                     updated_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS dismissals (
+                    match_id TEXT NOT NULL,
+                    innings_number INTEGER NOT NULL,
+                    batter_name TEXT NOT NULL,
+                    batter_player_id INTEGER,
+                    bowler_name TEXT,
+                    bowler_player_id INTEGER,
+                    dismissal_kind TEXT NOT NULL,
+                    over_number INTEGER,
+                    match_type TEXT,
+                    date TEXT,
+                    event_name TEXT,
+                    batting_team TEXT,
+                    bowling_team TEXT,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (match_id, innings_number, batter_name)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_dismissals_batter_player_id ON dismissals(batter_player_id);
+                CREATE INDEX IF NOT EXISTS idx_dismissals_bowler_player_id ON dismissals(bowler_player_id);
+                CREATE INDEX IF NOT EXISTS idx_dismissals_match_id ON dismissals(match_id);
+
                 CREATE INDEX IF NOT EXISTS idx_analytics_matches_match_type ON analytics_matches(match_type);
                 CREATE INDEX IF NOT EXISTS idx_batting_match_type_runs ON batting_performances(match_type, runs DESC);
                 CREATE INDEX IF NOT EXISTS idx_batting_player_id ON batting_performances(player_id);
@@ -186,3 +208,26 @@ class Registry:
                 (match_id,),
             ).fetchone()
         return row is not None
+
+    def has_match_dismissals(self, match_id: str) -> bool:
+        """Return True if dismissal records exist for this match.
+
+        A match with no wickets (e.g. abandoned) legitimately has zero
+        dismissals, so we check analytics_matches instead to confirm the
+        match was processed with the new schema.
+        """
+        with self.connect() as connection:
+            # If the match has wickets but no dismissal rows, it needs backfill
+            innings_row = connection.execute(
+                "SELECT SUM(wickets) as total_wickets FROM analytics_innings WHERE match_id = ?",
+                (match_id,),
+            ).fetchone()
+            total_wickets = innings_row["total_wickets"] if innings_row else 0
+            if not total_wickets:
+                # No wickets fell — dismissals table will legitimately be empty
+                return True
+            dismissal_row = connection.execute(
+                "SELECT 1 FROM dismissals WHERE match_id = ? LIMIT 1",
+                (match_id,),
+            ).fetchone()
+        return dismissal_row is not None

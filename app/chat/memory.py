@@ -1,63 +1,19 @@
+"""Conversation state management.
+
+Stores and retrieves context from the previous turn so the LLM classifier
+can resolve pronouns and follow-up references.
+
+The LLM (classify_intent) handles all pronoun resolution and question
+rewriting.  This module's only job is to persist the structured state
+between turns and update it after each answer.
+"""
+
 from __future__ import annotations
 
 import copy
-from typing import Callable
 
 
 ConversationState = dict[str, str]
-
-
-def resolve_follow_up_question(
-    question: str,
-    state: ConversationState | None,
-    player_resolver: Callable[[str], str | None] | None = None,
-) -> tuple[str, str | None]:
-    if not state:
-        return question, None
-
-    lowered = question.lower()
-    explicit_player = player_resolver(question) if player_resolver is not None else None
-    match_context_needed = any(
-        marker in lowered
-        for marker in [
-            "that match",
-            "that game",
-            "that innings",
-            "there",
-            "in the chase",
-            "during the chase",
-            "in the final overs",
-            "in that game",
-            "in that match",
-            "what happened then",
-        ]
-    )
-    player_context_needed = any(
-        marker in lowered
-        for marker in [
-            "what about",
-            "how about",
-            "his",
-            "him",
-            "he ",
-            "that player",
-            "that batter",
-            "that bowler",
-            "did he",
-        ]
-    )
-
-    prefixes: list[str] = []
-    if match_context_needed and state.get("last_match_label"):
-        prefixes.append(f"In the match {state['last_match_label']}")
-    if player_context_needed and not explicit_player and state.get("last_player_name"):
-        prefixes.append(f"regarding {state['last_player_name']}")
-
-    if not prefixes:
-        return question, explicit_player
-
-    rewritten = ", ".join(prefixes) + ", " + question
-    return rewritten, explicit_player
 
 
 def update_conversation_state(
@@ -66,6 +22,7 @@ def update_conversation_state(
     response: dict[str, object],
     explicit_player_name: str | None = None,
 ) -> ConversationState:
+    """Build the next conversation state from the current response."""
     next_state: ConversationState = copy.deepcopy(state or {})
     next_state["last_question"] = question
 
@@ -84,6 +41,11 @@ def update_conversation_state(
     if isinstance(player_name, str) and player_name.strip():
         next_state["last_player_name"] = player_name.strip()
 
+    # Store match_id directly so follow-up queries can pin to the exact match
+    match_id = primary_source.get("match_id")
+    if isinstance(match_id, str) and match_id.strip():
+        next_state["last_match_id"] = match_id.strip()
+
     teams = primary_source.get("teams")
     date = primary_source.get("date")
     if isinstance(teams, str) and teams.strip():
@@ -99,4 +61,3 @@ def update_conversation_state(
         next_state["last_topic"] = title.strip()
 
     return next_state
-

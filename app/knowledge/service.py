@@ -1,3 +1,11 @@
+"""Cricket knowledge base service.
+
+Retrieves answers from the curated static knowledge base (rules, formats,
+terminology).  Routing to this service is done by the LLM intent classifier
+(intent == "cricket_knowledge") — this module only handles retrieval and
+answer formatting.
+"""
+
 from __future__ import annotations
 
 import re
@@ -30,23 +38,30 @@ class KnowledgeService:
         }
 
     def retrieve(self, question: str) -> dict[str, str] | None:
-        query_tokens = _normalize_tokens(question)
+        """Score each knowledge item by token overlap with the question.
+
+        This is retrieval over a small static dataset — not routing logic.
+        The LLM has already decided this is a cricket_knowledge question;
+        we just need to find the best matching entry.
+        """
+        query_tokens = _tokenize(question)
         if not query_tokens:
             return None
 
         best_item = None
         best_score = 0
         for item in KNOWLEDGE_ITEMS:
-            score = 0
-            haystacks = [
-                item["title"].lower(),
-                item["content"].lower(),
-                " ".join(item["topics"]).lower(),
-            ]
-            for token in query_tokens:
-                for haystack in haystacks:
-                    if token in haystack:
-                        score += 2
+            score = sum(
+                2
+                for token in query_tokens
+                for haystack in [
+                    item["title"].lower(),
+                    item["content"].lower(),
+                    " ".join(item["topics"]).lower(),
+                ]
+                if token in haystack
+            )
+            # Boost the right powerplay variant when format is specified
             if item["id"].startswith("powerplay") and "powerplay" in query_tokens:
                 if "odi" in query_tokens and item["id"] == "powerplay_odi":
                     score += 5
@@ -59,38 +74,10 @@ class KnowledgeService:
         return best_item if best_score > 0 else None
 
 
-def looks_like_knowledge_question(question: str) -> bool:
-    lowered = question.lower()
-    markers = [
-        "what is",
-        "what does",
-        "difference between",
-        "how does",
-        "explain",
-        "meaning of",
-        "what's a",
-    ]
-    cricket_terms = [
-        "powerplay",
-        "dls",
-        "duckworth",
-        "no-ball",
-        "no ball",
-        "wide",
-        "lbw",
-        "strike rate",
-        "economy",
-        "free hit",
-        "super over",
-        "odi",
-        "test cricket",
-        "t20i",
-        "t20 cricket",
-    ]
-    return any(marker in lowered for marker in markers) and any(term in lowered for term in cricket_terms)
-
-
-def _normalize_tokens(text: str) -> list[str]:
-    raw = re.findall(r"[a-zA-Z0-9]+", text.lower())
+def _tokenize(text: str) -> list[str]:
+    """Tokenize text into lowercase words, removing common stopwords."""
     stopwords = {"what", "is", "the", "a", "an", "of", "in", "does", "how", "between", "explain"}
-    return [token for token in raw if token not in stopwords]
+    return [
+        token for token in re.findall(r"[a-zA-Z0-9]+", text.lower())
+        if token not in stopwords
+    ]
