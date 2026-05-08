@@ -20,6 +20,26 @@ class AggregateQuery:
     year: int | None = None
     venue: str | None = None
     international_only: bool = False
+    # For top-N queries
+    limit: int = 1
+
+
+@dataclass(slots=True)
+class PlayerCareerQuery:
+    """Career stats for a specific player across all or filtered matches."""
+    player_name: str
+    match_type: str | None = None
+    year: int | None = None
+    event_name: str | None = None
+
+
+@dataclass(slots=True)
+class HeadToHeadQuery:
+    """Win/loss record between two teams."""
+    team1: str
+    team2: str
+    match_type: str | None = None
+    year: int | None = None
 
 
 @dataclass(slots=True)
@@ -61,6 +81,30 @@ class AnalyticsQueryService:
                     return self._answer_player_dismissal(connection, question, intent)
 
                 if intent.intent == "aggregate_stats":
+                    # Career stats for a specific player — check before leaderboards
+                    if intent.player:
+                        career_q = _intent_to_career_query(intent)
+                        if career_q is not None:
+                            result = _answer_career_query(connection, career_q)
+                            if result is not None:
+                                # Always let the LLM synthesise the answer from the
+                                # career fact sheet. This handles any question phrasing
+                                # without keyword matching — "how many centuries?",
+                                # "what's the average?", "overseas record?", etc.
+                                if self._ollama_base_url:
+                                    result["answer"] = self._synthesise_career_answer(
+                                        intent.rewritten_question, result
+                                    )
+                                return result
+
+                    # Head-to-head between two teams — extract both from rewritten question
+                    h2h = _intent_to_head_to_head(intent)
+                    if h2h is not None:
+                        result = _answer_head_to_head(connection, h2h)
+                        if result is not None:
+                            return result
+
+                    # Leaderboard / record queries
                     parsed = _intent_to_aggregate_query(intent)
                     if parsed is not None:
                         return self._answer_aggregate(connection, parsed)
@@ -71,6 +115,55 @@ class AnalyticsQueryService:
             # When intent is None the LLM classifier was unavailable.
             # Return None and let the caller fall back to RAG.
             return None
+
+    def _synthesise_career_answer(
+        self,
+        question: str,
+        career_result: dict[str, object],
+    ) -> str:
+        """Use the LLM to answer a specific question from the career stats fact sheet.
+
+        The career fact sheet contains all computed stats. The LLM reads it and
+        answers the specific question — "how many centuries?", "what's the average?",
+        "overseas record?" — without any keyword matching on our side.
+
+        If the fact sheet doesn't contain the data needed (e.g. home/away splits),
+        the LLM will say so honestly.
+        """
+        import httpx
+
+        sources = career_result.get("sources") or []
+        if not sources:
+            return str(career_result.get("answer", ""))
+
+        fact_sheet = str(sources[0].get("text", ""))
+        prompt = (
+            "You are a cricket stats assistant. Answer the question using ONLY the "
+            "career stats fact sheet below. Be concise — one or two sentences.\n"
+            "If the fact sheet does not contain the information needed "
+            "(e.g. home/away splits, overseas records, venue-specific stats), "
+            "say exactly: \"I don't have that breakdown in the current dataset.\"\n"
+            "Do not invent numbers. Do not add information not in the fact sheet.\n\n"
+            f"Career stats fact sheet:\n{fact_sheet}\n\n"
+            f"Question: {question}\n"
+            "Answer:"
+        )
+        try:
+            response = httpx.post(
+                f"{self._ollama_base_url.rstrip('/')}/api/generate",
+                json={
+                    "model": self._ollama_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"temperature": 0},
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            synthesised = str(response.json().get("response", "")).strip()
+            return synthesised if synthesised else str(career_result.get("answer", ""))
+        except Exception:
+            return str(career_result.get("answer", ""))
 
     def _answer_player_performance(
         self,
@@ -219,18 +312,31 @@ class AnalyticsQueryService:
             }
 
         if parsed.metric == "most_runs":
-            row = _query_most_runs(connection, parsed)
-            if row is None:
+            result = _query_most_runs(connection, parsed)
+            if result is None:
                 return None
-            display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
-            answer = (
-                f"The player with the most runs{_format_filter_suffix(parsed)} is "
-                f"{display_name} with {row['total_runs']} runs."
-            )
-            source_text = (
-                f"{display_name} has {row['total_runs']} runs across {row['innings_count']} innings"
-                f"{_format_filter_suffix(parsed)}."
-            )
+            rows = result if isinstance(result, list) else [result]
+            if parsed.limit == 1:
+                row = rows[0]
+                display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+                answer = (
+                    f"The player with the most runs{_format_filter_suffix(parsed)} is "
+                    f"{display_name} with {row['total_runs']} runs."
+                )
+                source_text = (
+                    f"{display_name} has {row['total_runs']} runs across {row['innings_count']} innings"
+                    f"{_format_filter_suffix(parsed)}."
+                )
+            else:
+                suffix = _format_filter_suffix(parsed)
+                lines = [f"Top {len(rows)} run scorers{suffix}:"]
+                for i, row in enumerate(rows, 1):
+                    dn = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+                    lines.append(f"{i}. {dn} — {row['total_runs']} runs ({row['innings_count']} innings)")
+                answer = "\n".join(lines)
+                row = rows[0]
+                display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+                source_text = f"Run scorers leaderboard{suffix}: {row['player_name']} leads with {row['total_runs']}"
             return {
                 "answer": answer,
                 "sources": [
@@ -252,18 +358,31 @@ class AnalyticsQueryService:
             }
 
         if parsed.metric == "most_wickets":
-            row = _query_most_wickets(connection, parsed)
-            if row is None:
+            result = _query_most_wickets(connection, parsed)
+            if result is None:
                 return None
-            display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
-            answer = (
-                f"The player with the most wickets{_format_filter_suffix(parsed)} is "
-                f"{display_name} with {row['total_wickets']} wickets."
-            )
-            source_text = (
-                f"{display_name} has {row['total_wickets']} wickets in {row['match_count']} matches"
-                f"{_format_filter_suffix(parsed)}."
-            )
+            rows = result if isinstance(result, list) else [result]
+            if parsed.limit == 1:
+                row = rows[0]
+                display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+                answer = (
+                    f"The player with the most wickets{_format_filter_suffix(parsed)} is "
+                    f"{display_name} with {row['total_wickets']} wickets."
+                )
+                source_text = (
+                    f"{display_name} has {row['total_wickets']} wickets in {row['match_count']} matches"
+                    f"{_format_filter_suffix(parsed)}."
+                )
+            else:
+                suffix = _format_filter_suffix(parsed)
+                lines = [f"Top {len(rows)} wicket takers{suffix}:"]
+                for i, row in enumerate(rows, 1):
+                    dn = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+                    lines.append(f"{i}. {dn} — {row['total_wickets']} wickets ({row['match_count']} matches)")
+                answer = "\n".join(lines)
+                row = rows[0]
+                display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+                source_text = f"Wicket takers leaderboard{suffix}: {row['player_name']} leads with {row['total_wickets']}"
             return {
                 "answer": answer,
                 "sources": [
@@ -282,6 +401,121 @@ class AnalyticsQueryService:
                         "document_type": "analytics_result",
                     }
                 ],
+            }
+
+        if parsed.metric == "best_batting_average":
+            rows = _query_best_batting_average(connection, parsed)
+            if not rows:
+                return None
+            suffix = _format_filter_suffix(parsed)
+            if parsed.limit == 1:
+                row = rows[0]
+                display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+                answer = (
+                    f"The best batting average{suffix} is {row['average']} by {display_name} "
+                    f"({row['total_runs']} runs in {row['innings']} innings, "
+                    f"{row['dismissals']} dismissals)."
+                )
+            else:
+                lines = [f"Top batting averages{suffix}:"]
+                for i, row in enumerate(rows, 1):
+                    dn = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+                    lines.append(f"{i}. {dn} — {row['average']} avg ({row['total_runs']} runs, {row['innings']} innings)")
+                answer = "\n".join(lines)
+                row = rows[0]
+                display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+            source_text = f"Batting average leaderboard{suffix}: {rows[0]['player_name']} leads with {rows[0]['average']}"
+            return {
+                "answer": answer,
+                "sources": [{"chunk_id": f"analytics:batting_average{suffix}", "score": 1.0,
+                             "text": source_text, "title": "Analytics aggregate result",
+                             "player_name": rows[0]["player_name"], "display_name": display_name,
+                             "match_id": "", "date": "", "match_type": parsed.match_type or "",
+                             "event_name": "", "venue": parsed.venue or "", "document_type": "analytics_result"}],
+            }
+
+        if parsed.metric == "best_bowling_figures":
+            row = _query_best_bowling_figures(connection, parsed)
+            if row is None:
+                return None
+            display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+            suffix = _format_filter_suffix(parsed)
+            answer = (
+                f"The best bowling figures{suffix} are {row['wickets']}/{row['runs_conceded']} "
+                f"by {display_name} for {row['bowling_team']} against {row['opposition_team']} on {row['date']}."
+            )
+            source_text = (
+                f"{display_name}: {row['wickets']}/{row['runs_conceded']} "
+                f"for {row['bowling_team']} vs {row['opposition_team']} on {row['date']}."
+            )
+            return {
+                "answer": answer,
+                "sources": [{"chunk_id": f"analytics:{row['match_id']}:best_bowling", "score": 1.0,
+                             "text": source_text, "title": "Analytics record result",
+                             "player_name": row["player_name"], "display_name": display_name,
+                             "match_id": row["match_id"], "date": row["date"],
+                             "match_type": row["match_type"] or "", "event_name": row["event_name"] or "",
+                             "venue": row["venue"] or "", "document_type": "analytics_result"}],
+            }
+
+        if parsed.metric == "best_economy":
+            row = _query_best_economy(connection, parsed)
+            if row is None:
+                return None
+            display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+            suffix = _format_filter_suffix(parsed)
+            answer = (
+                f"The best bowling economy{suffix} is {row['economy']} by {display_name} "
+                f"({row['total_wickets']} wickets in {row['match_count']} matches)."
+            )
+            source_text = f"{display_name}: economy {row['economy']}{suffix}"
+            return {
+                "answer": answer,
+                "sources": [{"chunk_id": f"analytics:player:{row['player_id']}:economy", "score": 1.0,
+                             "text": source_text, "title": "Analytics aggregate result",
+                             "player_name": row["player_name"], "display_name": display_name,
+                             "match_id": "", "date": "", "match_type": parsed.match_type or "",
+                             "event_name": "", "venue": parsed.venue or "", "document_type": "analytics_result"}],
+            }
+
+        if parsed.metric == "most_runs_venue":
+            row = _query_most_runs_venue(connection, parsed)
+            if row is None:
+                return None
+            display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+            suffix = _format_filter_suffix(parsed)
+            answer = (
+                f"The player with the most runs{suffix} is {display_name} "
+                f"with {row['total_runs']} runs in {row['innings']} innings."
+            )
+            source_text = f"{display_name}: {row['total_runs']} runs in {row['innings']} innings{suffix}"
+            return {
+                "answer": answer,
+                "sources": [{"chunk_id": f"analytics:player:{row['player_id']}:venue_runs", "score": 1.0,
+                             "text": source_text, "title": "Analytics aggregate result",
+                             "player_name": row["player_name"], "display_name": display_name,
+                             "match_id": "", "date": "", "match_type": parsed.match_type or "",
+                             "event_name": "", "venue": parsed.venue or "", "document_type": "analytics_result"}],
+            }
+
+        if parsed.metric == "most_wickets_venue":
+            row = _query_most_wickets_venue(connection, parsed)
+            if row is None:
+                return None
+            display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+            suffix = _format_filter_suffix(parsed)
+            answer = (
+                f"The bowler with the most wickets{suffix} is {display_name} "
+                f"with {row['total_wickets']} wickets in {row['match_count']} matches."
+            )
+            source_text = f"{display_name}: {row['total_wickets']} wickets{suffix}"
+            return {
+                "answer": answer,
+                "sources": [{"chunk_id": f"analytics:player:{row['player_id']}:venue_wickets", "score": 1.0,
+                             "text": source_text, "title": "Analytics aggregate result",
+                             "player_name": row["player_name"], "display_name": display_name,
+                             "match_id": "", "date": "", "match_type": parsed.match_type or "",
+                             "event_name": "", "venue": parsed.venue or "", "document_type": "analytics_result"}],
             }
 
         return None
@@ -632,29 +866,112 @@ def _answer_dismissal_question(
 
 def _intent_to_aggregate_query(intent: IntentResult) -> AggregateQuery | None:
     """Convert an IntentResult with aggregate_stats intent into an AggregateQuery."""
+    lowered = (intent.rewritten_question or "").lower()
+    metric = intent.metric or ""
+
+    # Map LLM metric field values to internal metric names
     metric_map = {
         "highest_score": "highest_individual_score",
         "runs": "most_runs",
         "wickets": "most_wickets",
+        "average": "best_batting_average",
+        "batting_average": "best_batting_average",
+        "economy": "best_economy",
+        "economy_rate": "best_economy",
+        "bowling_average": "best_economy",
+        "strike_rate": "most_runs",  # SR leaderboard → most runs proxy
     }
-    # Also try to infer metric from the rewritten question text as fallback
-    metric = metric_map.get(intent.metric or "")
-    if not metric:
-        lowered = (intent.rewritten_question or "").lower()
-        if "highest" in lowered and ("score" in lowered or "run" in lowered):
-            metric = "highest_individual_score"
-        elif "most runs" in lowered or "most run" in lowered:
-            metric = "most_runs"
-        elif "most wicket" in lowered:
-            metric = "most_wickets"
-    if not metric:
+    resolved = metric_map.get(metric)
+
+    # Detect top-N intent first — overrides metric mapping for leaderboard questions
+    import re as _re
+    top_n_match = _re.search(r"\btop\s+(\d+)\b", lowered)
+    limit = int(top_n_match.group(1)) if top_n_match else 1
+
+    # When top-N is requested, "highest_score" likely means "most runs" leaderboard
+    if top_n_match and resolved == "highest_individual_score":
+        if "run scorer" in lowered or "run scorer" in lowered or "batting" in lowered:
+            resolved = "most_runs"
+        elif "wicket" in lowered or "bowler" in lowered:
+            resolved = "most_wickets"
+
+    # Infer from rewritten question text when metric field is missing or unmapped
+    if not resolved:
+        if "best bowling figures" in lowered or "best figures" in lowered:
+            resolved = "best_bowling_figures"
+        elif "batting average" in lowered or "best average" in lowered:
+            resolved = "best_batting_average"
+        elif "economy" in lowered and ("best" in lowered or "lowest" in lowered):
+            resolved = "best_economy"
+        elif ("most runs" in lowered or "most run" in lowered or "run scorer" in lowered) and intent.venue:
+            resolved = "most_runs_venue"
+        elif ("most wickets" in lowered or "most wicket" in lowered) and intent.venue:
+            resolved = "most_wickets_venue"
+        elif "most runs" in lowered or "most run" in lowered or "run scorer" in lowered:
+            resolved = "most_runs"
+        elif "most wickets" in lowered or "most wicket" in lowered:
+            resolved = "most_wickets"
+        elif "highest" in lowered and ("score" in lowered or "run" in lowered):
+            resolved = "highest_individual_score"
+
+    if not resolved:
         return None
+
     return AggregateQuery(
-        metric=metric,
+        metric=resolved,
         match_type=intent.match_type,
         year=intent.year,
         venue=intent.venue,
         international_only=bool(intent.event and "international" in (intent.event or "").lower()),
+        limit=min(limit, 10),  # cap at 10
+    )
+
+
+def _intent_to_career_query(intent: IntentResult) -> "PlayerCareerQuery | None":
+    """When a player is named in an aggregate_stats question, it's a career query.
+
+    Any aggregate question about a specific player — "what's Kohli's average?",
+    "how many centuries?", "what's his highest score?", "how many sixes?" — is
+    answered from that player's career stats. No keyword matching needed.
+    """
+    if not intent.player:
+        return None
+    return PlayerCareerQuery(
+        player_name=intent.player,
+        match_type=intent.match_type,
+        year=intent.year,
+        event_name=intent.event,
+    )
+
+
+def _intent_to_head_to_head(intent: IntentResult) -> "HeadToHeadQuery | None":
+    """Detect head-to-head questions: 'India vs Australia ODI record'."""
+    lowered = (intent.rewritten_question or "").lower()
+    h2h_signals = ["head to head", "head-to-head", "record against", " vs ", "versus", "win loss", "wins against"]
+    if not any(s in lowered for s in h2h_signals):
+        return None
+
+    # Extract both teams from the rewritten question using known team names
+    known_teams = [
+        "india", "australia", "england", "pakistan", "sri lanka", "new zealand",
+        "south africa", "west indies", "bangladesh", "zimbabwe", "afghanistan",
+        "ireland", "scotland", "netherlands", "kenya", "canada", "uae",
+    ]
+    found_teams = [t for t in known_teams if t in lowered]
+    if len(found_teams) < 2:
+        # Fall back to intent fields
+        team1 = intent.team
+        team2 = intent.player2 or intent.player
+        if not team1 or not team2:
+            return None
+    else:
+        team1, team2 = found_teams[0], found_teams[1]
+
+    return HeadToHeadQuery(
+        team1=team1,
+        team2=team2,
+        match_type=intent.match_type,
+        year=intent.year,
     )
 
 
@@ -697,9 +1014,12 @@ def _query_most_runs(connection: sqlite3.Connection, parsed: AggregateQuery) -> 
         WHERE {' AND '.join(clauses)}
         GROUP BY bp.player_id, bp.player_name
         ORDER BY total_runs DESC, innings_count ASC, bp.player_name ASC
-        LIMIT 1
+        LIMIT {parsed.limit}
     """
-    return connection.execute(sql, params).fetchone()
+    rows = connection.execute(sql, params).fetchall()
+    if not rows:
+        return None
+    return rows[0] if parsed.limit == 1 else rows  # type: ignore[return-value]
 
 
 def _query_most_wickets(connection: sqlite3.Connection, parsed: AggregateQuery) -> sqlite3.Row | None:
@@ -716,9 +1036,12 @@ def _query_most_wickets(connection: sqlite3.Connection, parsed: AggregateQuery) 
         WHERE {' AND '.join(clauses)}
         GROUP BY bp.player_id, bp.player_name
         ORDER BY total_wickets DESC, match_count ASC, bp.player_name ASC
-        LIMIT 1
+        LIMIT {parsed.limit}
     """
-    return connection.execute(sql, params).fetchone()
+    rows = connection.execute(sql, params).fetchall()
+    if not rows:
+        return None
+    return rows[0] if parsed.limit == 1 else rows  # type: ignore[return-value]
 
 
 def _apply_common_filters(
@@ -772,6 +1095,383 @@ def _match_type_filters(match_type: str) -> list[str]:
     if normalized == "T20":
         return ["T20", "IT20", "T20I"]
     return [match_type]
+
+
+# ---------------------------------------------------------------------------
+# New query functions for expanded analytics
+# ---------------------------------------------------------------------------
+
+
+def _query_best_batting_average(
+    connection: sqlite3.Connection, parsed: AggregateQuery
+) -> list[sqlite3.Row]:
+    """Batting average = total runs / dismissals (min 20 innings)."""
+    clauses: list[str] = ["1=1"]
+    params: list[object] = []
+    _apply_common_filters(clauses, params, parsed, table_alias="bp")
+    where = " AND ".join(clauses)
+    sql = f"""
+        SELECT
+            bp.player_id,
+            bp.player_name,
+            SUM(bp.runs) AS total_runs,
+            COUNT(*) AS innings,
+            COUNT(d.batter_name) AS dismissals,
+            ROUND(
+                CAST(SUM(bp.runs) AS REAL) / NULLIF(COUNT(d.batter_name), 0),
+                2
+            ) AS average
+        FROM batting_performances bp
+        LEFT JOIN dismissals d
+            ON d.match_id = bp.match_id
+            AND d.innings_number = bp.innings_number
+            AND lower(d.batter_name) = lower(bp.player_name)
+        WHERE {where}
+        GROUP BY bp.player_id, bp.player_name
+        HAVING innings >= 10
+        ORDER BY average DESC, total_runs DESC
+        LIMIT {parsed.limit}
+    """
+    return connection.execute(sql, params).fetchall()
+
+
+def _query_best_bowling_figures(
+    connection: sqlite3.Connection, parsed: AggregateQuery
+) -> sqlite3.Row | None:
+    """Best single-innings bowling figures (most wickets, fewest runs)."""
+    clauses: list[str] = ["1=1"]
+    params: list[object] = []
+    _apply_common_filters(clauses, params, parsed, table_alias="bp")
+    sql = f"""
+        SELECT
+            bp.match_id,
+            bp.player_id,
+            bp.player_name,
+            bp.wickets,
+            bp.runs_conceded,
+            bp.bowling_team,
+            bp.opposition_team,
+            bp.match_type,
+            bp.date,
+            bp.venue,
+            bp.event_name
+        FROM bowling_performances bp
+        WHERE {' AND '.join(clauses)}
+        ORDER BY bp.wickets DESC, bp.runs_conceded ASC, bp.date ASC
+        LIMIT 1
+    """
+    return connection.execute(sql, params).fetchone()
+
+
+def _query_best_economy(
+    connection: sqlite3.Connection, parsed: AggregateQuery
+) -> sqlite3.Row | None:
+    """Best bowling economy rate (min 300 balls bowled)."""
+    clauses: list[str] = ["1=1"]
+    params: list[object] = []
+    _apply_common_filters(clauses, params, parsed, table_alias="bp")
+    sql = f"""
+        SELECT
+            bp.player_id,
+            bp.player_name,
+            ROUND(
+                CAST(SUM(bp.runs_conceded) * 6.0 AS REAL) / NULLIF(SUM(bp.balls_bowled), 0),
+                2
+            ) AS economy,
+            SUM(bp.wickets) AS total_wickets,
+            COUNT(DISTINCT bp.match_id) AS match_count
+        FROM bowling_performances bp
+        WHERE {' AND '.join(clauses)}
+        GROUP BY bp.player_id, bp.player_name
+        HAVING SUM(bp.balls_bowled) >= 300
+        ORDER BY economy ASC
+        LIMIT 1
+    """
+    return connection.execute(sql, params).fetchone()
+
+
+def _query_most_runs_venue(
+    connection: sqlite3.Connection, parsed: AggregateQuery
+) -> sqlite3.Row | None:
+    """Most runs at a specific venue."""
+    if not parsed.venue:
+        return None
+    clauses: list[str] = ["1=1"]
+    params: list[object] = []
+    _apply_common_filters(clauses, params, parsed, table_alias="bp")
+    sql = f"""
+        SELECT
+            bp.player_id,
+            bp.player_name,
+            SUM(bp.runs) AS total_runs,
+            COUNT(*) AS innings
+        FROM batting_performances bp
+        WHERE {' AND '.join(clauses)}
+        GROUP BY bp.player_id, bp.player_name
+        ORDER BY total_runs DESC
+        LIMIT 1
+    """
+    return connection.execute(sql, params).fetchone()
+
+
+def _query_most_wickets_venue(
+    connection: sqlite3.Connection, parsed: AggregateQuery
+) -> sqlite3.Row | None:
+    """Most wickets at a specific venue."""
+    if not parsed.venue:
+        return None
+    clauses: list[str] = ["1=1"]
+    params: list[object] = []
+    _apply_common_filters(clauses, params, parsed, table_alias="bp")
+    sql = f"""
+        SELECT
+            bp.player_id,
+            bp.player_name,
+            SUM(bp.wickets) AS total_wickets,
+            COUNT(DISTINCT bp.match_id) AS match_count
+        FROM bowling_performances bp
+        WHERE {' AND '.join(clauses)}
+        GROUP BY bp.player_id, bp.player_name
+        ORDER BY total_wickets DESC
+        LIMIT 1
+    """
+    return connection.execute(sql, params).fetchone()
+
+
+def _answer_career_query(
+    connection: sqlite3.Connection,
+    query: PlayerCareerQuery,
+) -> dict[str, object] | None:
+    """Answer a player career stats question."""
+    from app.analytics.players import get_preferred_player_display_name, resolve_player_name
+
+    # Resolve player — try up to 10 candidates and pick the one with the most data.
+    # For ambiguous last-name-only queries (e.g. "Kohli"), the player with the
+    # most innings in the DB is almost certainly the famous one.
+    candidates = resolve_player_name(connection, query.player_name, limit=10)
+    if not candidates:
+        return None
+
+    # Pick the candidate with the most batting innings (most data = most likely the right player)
+    best_player_id = candidates[0].player_id
+    best_innings = 0
+    for candidate in candidates:
+        row = connection.execute(
+            "SELECT COUNT(*) as n FROM batting_performances WHERE player_id = ?",
+            (candidate.player_id,),
+        ).fetchone()
+        if row and int(row["n"]) > best_innings:
+            best_innings = int(row["n"])
+            best_player_id = candidate.player_id
+
+    player_id = best_player_id
+    display_name = get_preferred_player_display_name(connection, player_id, query.player_name)
+
+    # Collect all aliases for the player
+    alias_rows = connection.execute(
+        "SELECT alias FROM player_aliases WHERE player_id = ?", (player_id,)
+    ).fetchall()
+    player_names = {query.player_name} | {str(r["alias"]).strip() for r in alias_rows}
+    placeholders = ", ".join("?" for _ in player_names)
+    params: list[object] = [n.lower() for n in player_names]
+
+    # Build filters
+    bat_clauses = [f"lower(bp.player_name) IN ({placeholders})"]
+    bowl_clauses = [f"lower(bp.player_name) IN ({placeholders})"]
+    bat_params = list(params)
+    bowl_params = list(params)
+
+    if query.match_type:
+        allowed = _match_type_filters(query.match_type)
+        ph = ", ".join("?" for _ in allowed)
+        bat_clauses.append(f"bp.match_type IN ({ph})")
+        bowl_clauses.append(f"bp.match_type IN ({ph})")
+        bat_params.extend(allowed)
+        bowl_params.extend(allowed)
+    if query.year:
+        bat_clauses.append("substr(bp.date, 1, 4) = ?")
+        bowl_clauses.append("substr(bp.date, 1, 4) = ?")
+        bat_params.append(str(query.year))
+        bowl_params.append(str(query.year))
+
+    # Batting stats
+    bat_row = connection.execute(f"""
+        SELECT
+            COUNT(DISTINCT bp.match_id) AS matches,
+            COUNT(*) AS innings,
+            SUM(bp.runs) AS total_runs,
+            MAX(bp.runs) AS highest,
+            ROUND(AVG(bp.strike_rate), 1) AS avg_sr,
+            SUM(bp.fours) AS fours,
+            SUM(bp.sixes) AS sixes,
+            COUNT(d.batter_name) AS dismissals,
+            ROUND(CAST(SUM(bp.runs) AS REAL) / NULLIF(COUNT(d.batter_name), 0), 2) AS average,
+            SUM(CASE WHEN bp.runs >= 100 THEN 1 ELSE 0 END) AS centuries,
+            SUM(CASE WHEN bp.runs >= 50 AND bp.runs < 100 THEN 1 ELSE 0 END) AS fifties
+        FROM batting_performances bp
+        LEFT JOIN dismissals d
+            ON d.match_id = bp.match_id
+            AND d.innings_number = bp.innings_number
+            AND lower(d.batter_name) = lower(bp.player_name)
+        WHERE {' AND '.join(bat_clauses)}
+    """, bat_params).fetchone()
+
+    # Bowling stats
+    bowl_row = connection.execute(f"""
+        SELECT
+            SUM(bp.wickets) AS total_wickets,
+            SUM(bp.runs_conceded) AS runs_conceded,
+            SUM(bp.balls_bowled) AS balls_bowled,
+            ROUND(CAST(SUM(bp.runs_conceded) * 6.0 AS REAL) / NULLIF(SUM(bp.balls_bowled), 0), 2) AS economy,
+            MAX(bp.wickets) AS best_wickets,
+            MIN(CASE WHEN bp.wickets = (SELECT MAX(wickets) FROM bowling_performances WHERE lower(player_name) IN ({placeholders})) THEN bp.runs_conceded ELSE NULL END) AS best_runs
+        FROM bowling_performances bp
+        WHERE {' AND '.join(bowl_clauses)}
+    """, bowl_params + list(params)).fetchone()
+
+    if bat_row is None or bat_row["matches"] == 0:
+        # Try broader match type filter (T20I data may be stored as T20)
+        if query.match_type and query.match_type.upper() in ("T20I", "IT20"):
+            broader = PlayerCareerQuery(
+                player_name=query.player_name,
+                match_type="T20",
+                year=query.year,
+                event_name=query.event_name,
+            )
+            return _answer_career_query(connection, broader)
+        return None
+
+    fmt = query.match_type or "all formats"
+    parts = [f"**{display_name}** — {fmt} career stats:"]
+
+    # Batting
+    if bat_row["innings"] and int(bat_row["innings"]) > 0:
+        parts.append(
+            f"Batting: {bat_row['matches']} matches, {bat_row['innings']} innings, "
+            f"{bat_row['total_runs']} runs, highest {bat_row['highest']}, "
+            f"average {bat_row['average'] or 'N/A'}, SR {bat_row['avg_sr'] or 'N/A'}, "
+            f"{bat_row['centuries']} centuries, {bat_row['fifties']} fifties."
+        )
+
+    # Bowling
+    if bowl_row and bowl_row["total_wickets"] and int(bowl_row["total_wickets"]) > 0:
+        parts.append(
+            f"Bowling: {bowl_row['total_wickets']} wickets, "
+            f"economy {bowl_row['economy'] or 'N/A'}, "
+            f"best figures {bowl_row['best_wickets']}/{bowl_row['best_runs'] or '?'}."
+        )
+
+    answer = "\n".join(parts)
+    # Rich fact sheet — the LLM reads this to answer any specific question.
+    # Include every computed stat so the LLM can answer "how many centuries?",
+    # "what's the average?", "how many sixes?", etc. without keyword matching.
+    # Explicitly note what's NOT available so the LLM answers honestly.
+    source_text = (
+        f"{display_name} {fmt} career (all matches in dataset, including domestic/IPL): "
+        f"{bat_row['matches']} matches, {bat_row['innings']} innings, "
+        f"{bat_row['total_runs']} runs, highest score {bat_row['highest']}, "
+        f"batting average {bat_row['average'] or 'N/A'} (runs divided by dismissals), "
+        f"strike rate {bat_row['avg_sr'] or 'N/A'}, "
+        f"{bat_row['centuries']} centuries (100s, includes domestic/IPL centuries), "
+        f"{bat_row['fifties']} fifties (50s), "
+        f"{bat_row['fours']} fours, {bat_row['sixes']} sixes, "
+        f"dismissed {bat_row['dismissals']} times, "
+        f"{bat_row['innings'] - bat_row['dismissals']} not-outs."
+    )
+    if bowl_row and bowl_row["total_wickets"] and int(bowl_row["total_wickets"]) > 0:
+        source_text += (
+            f" Bowling: {bowl_row['total_wickets']} wickets, "
+            f"economy {bowl_row['economy'] or 'N/A'}, "
+            f"best figures {bowl_row['best_wickets']}/{bowl_row['best_runs'] or '?'}."
+        )
+    source_text += (
+        " Note: home/away splits, overseas records, and venue-specific breakdowns "
+        "are not available in this dataset."
+    )
+    return {
+        "answer": answer,
+        "sources": [{
+            "chunk_id": f"analytics:career:{player_id}:{fmt}",
+            "score": 1.0,
+            "text": source_text,
+            "title": "Player career stats",
+            "player_name": query.player_name,
+            "display_name": display_name,
+            "match_id": "",
+            "date": "",
+            "match_type": query.match_type or "",
+            "event_name": "",
+            "venue": "",
+            "document_type": "analytics_result",
+        }],
+    }
+
+
+def _answer_head_to_head(
+    connection: sqlite3.Connection,
+    query: HeadToHeadQuery,
+) -> dict[str, object] | None:
+    """Answer a head-to-head record question between two teams."""
+    clauses = [
+        "lower(teams_csv) LIKE ?",
+        "lower(teams_csv) LIKE ?",
+    ]
+    params: list[object] = [f"%{query.team1.lower()}%", f"%{query.team2.lower()}%"]
+
+    if query.match_type:
+        allowed = _match_type_filters(query.match_type)
+        ph = ", ".join("?" for _ in allowed)
+        clauses.append(f"match_type IN ({ph})")
+        params.extend(allowed)
+    if query.year:
+        clauses.append("substr(date, 1, 4) = ?")
+        params.append(str(query.year))
+
+    sql = f"""
+        SELECT
+            COUNT(*) AS total_matches,
+            SUM(CASE WHEN lower(outcome) LIKE ? THEN 1 ELSE 0 END) AS team1_wins,
+            SUM(CASE WHEN lower(outcome) LIKE ? THEN 1 ELSE 0 END) AS team2_wins,
+            SUM(CASE WHEN lower(outcome) LIKE '%no result%'
+                      OR lower(outcome) LIKE '%abandoned%'
+                      OR lower(outcome) LIKE '%tied%' THEN 1 ELSE 0 END) AS other
+        FROM analytics_matches
+        WHERE {' AND '.join(clauses)}
+    """
+    # CASE WHEN params come first (they're in SELECT), then WHERE params
+    all_params = [f"%{query.team1.lower()}%won%", f"%{query.team2.lower()}%won%"] + params
+    row = connection.execute(sql, all_params).fetchone()
+
+    if row is None or int(row["total_matches"]) == 0:
+        return None
+
+    fmt = query.match_type or "all formats"
+    t1 = query.team1.title()
+    t2 = query.team2.title()
+    answer = (
+        f"{t1} vs {t2} head-to-head in {fmt}: "
+        f"{row['total_matches']} matches played. "
+        f"{t1} won {row['team1_wins']}, {t2} won {row['team2_wins']}"
+        + (f", {row['other']} no result/tied." if row["other"] else ".")
+    )
+    source_text = f"{t1} vs {t2} {fmt}: {row['total_matches']} matches, {t1} {row['team1_wins']} wins, {t2} {row['team2_wins']} wins"
+    return {
+        "answer": answer,
+        "sources": [{
+            "chunk_id": f"analytics:h2h:{query.team1}:{query.team2}:{fmt}",
+            "score": 1.0,
+            "text": source_text,
+            "title": "Head-to-head record",
+            "player_name": "",
+            "display_name": "",
+            "match_id": "",
+            "date": "",
+            "match_type": query.match_type or "",
+            "event_name": "",
+            "venue": "",
+            "document_type": "analytics_result",
+        }],
+    }
 
 
 def _normalize_event_name(event: str | None) -> str | None:

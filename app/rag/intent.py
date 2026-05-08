@@ -47,7 +47,7 @@ INTENT_SCHEMA = """
   "year": <integer year if mentioned, else null>,
   "team": "<team name if mentioned, else null>",
   "venue": "<venue name if mentioned, else null>",
-  "metric": "<runs | wickets | economy | strike_rate | average | highest_score | null>",
+  "metric": "<runs | wickets | economy | strike_rate | average | batting_average | highest_score | best_bowling_figures | best_economy | null>",
   "rewritten_question": "<the question rewritten in full explicit form with all pronouns and references resolved using the conversation context>"
 }
 """

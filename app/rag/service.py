@@ -102,6 +102,22 @@ class ChatService:
             if is_followup:
                 intent.pinned_match_id = conversation_state["last_match_id"]
 
+        # If the LLM resolved a pronoun in rewritten_question but didn't set
+        # intent.player (can happen for aggregate follow-ups like "how many of
+        # them?" or "what's his highest?"), inject the player from context.
+        # The LLM already put the name in rewritten_question — we just need it
+        # in intent.player so the career/aggregate dispatch can use it.
+        if (
+            intent.intent == "aggregate_stats"
+            and not intent.player
+            and conversation_state
+            and conversation_state.get("last_player_name")
+        ):
+            last_player = conversation_state["last_player_name"]
+            # Only inject if the rewritten question mentions the player name
+            if last_player.lower() in intent.rewritten_question.lower():
+                intent.player = last_player
+
         _debug(
             f"[INTENT] intent={intent.intent} | player={intent.player!r} | "
             f"event={intent.event!r} | year={intent.year} | "
