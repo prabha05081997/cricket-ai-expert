@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import streamlit as st
 
 from app.analytics.stats import AnalyticsQueryService
@@ -8,6 +10,93 @@ from app.rag.index import LocalIndex
 from app.rag.llm import OllamaClient
 from app.rag.service import ChatService
 from app.settings import get_settings
+
+DEBUG_MODE = os.environ.get("CRICKET_AI_DEBUG", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _label_for_answer_type(answer_type: str) -> str:
+    labels = {
+        "analytics": "Analytics",
+        "knowledge": "Knowledge",
+        "match_narrative_rag": "Match Narrative",
+        "mixed": "Mixed Intent",
+        "mixed_rag": "Mixed Fallback",
+        "rag_fallback": "Fallback Retrieval",
+        "general": "General",
+        "disambiguation": "Disambiguation",
+    }
+    return labels.get(answer_type, answer_type or "Unknown")
+
+
+def _confidence_for_answer_type(answer_type: str) -> str:
+    if answer_type in {"analytics", "knowledge", "mixed"}:
+        return "High"
+    if answer_type in {"match_narrative_rag", "mixed_rag"}:
+        return "Medium"
+    if answer_type == "rag_fallback":
+        return "Low"
+    return "Medium"
+
+
+def _followup_suggestions(answer_type: str) -> list[str]:
+    suggestions = {
+        "analytics": [
+            "Ask for another player's career stats.",
+            "Try a top-5 leaderboard question for runs or wickets.",
+        ],
+        "knowledge": [
+            "Ask about another cricket rule or tournament format.",
+            "Ask for a definition of a common cricket term.",
+        ],
+        "match_narrative_rag": [
+            "Ask about a different match or series outcome.",
+            "Ask who was the key performer in a specific final.",
+        ],
+        "mixed": [
+            "Compare another pair of players or records.",
+            "Ask whether the result is strong for that format.",
+        ],
+        "mixed_rag": [
+            "Try a more specific comparison question.",
+            "Ask about another match result plus stats.",
+        ],
+        "rag_fallback": [
+            "Try a more specific match or player question.",
+            "Ask about a known event, tournament, or record.",
+        ],
+        "general": [
+            "Ask about cricket history or famous players.",
+            "Ask for an explanation of cricket strategy.",
+        ],
+    }
+    return suggestions.get(answer_type, [])
+
+
+def _render_message_metadata(message: dict) -> None:
+    answer_type = _label_for_answer_type(message.get("answer_type", ""))
+    confidence = message.get("confidence") or _confidence_for_answer_type(message.get("answer_type", ""))
+    st.markdown(
+        f"**Answer type:** `{answer_type}`  \n"
+        f"**Confidence:** `{confidence}`"
+    )
+    if DEBUG_MODE and message.get("rewritten_question"):
+        st.caption(f"Rewritten question: {message['rewritten_question']}")
+
+
+def _render_assistant_metadata(result: dict) -> None:
+    answer_type = _label_for_answer_type(result.get("answer_type", ""))
+    confidence = result.get("confidence") or _confidence_for_answer_type(result.get("answer_type", ""))
+    st.markdown(
+        f"**Answer type:** `{answer_type}`  \n"
+        f"**Confidence:** `{confidence}`"
+    )
+    if DEBUG_MODE and result.get("rewritten_question"):
+        st.caption(f"Rewritten question: {result['rewritten_question']}")
+    followups = _followup_suggestions(result.get("answer_type", ""))
+    if followups:
+        with st.expander("Suggested follow-up questions", expanded=False):
+            for followup in followups:
+                st.write(f"- {followup}")
 
 
 @st.cache_resource
@@ -50,6 +139,8 @@ with col1:
 # ---------------------------------------------------------------------------
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
+        if message["role"] == "assistant":
+            _render_message_metadata(message)
         st.markdown(message["content"])
         if message.get("sources"):
             with st.expander("Sources used"):
@@ -101,6 +192,7 @@ if _pending_candidates:
 
 def _render_assistant_result(result: dict) -> None:
     """Render an assistant result inside the current chat_message context."""
+    _render_assistant_metadata(result)
     st.markdown(result["answer"])
     sources = result.get("sources") or []
     if sources:
@@ -121,6 +213,8 @@ def _make_message_record(result: dict) -> dict:
         "content": result["answer"],
         "sources": result.get("sources") or [],
         "answer_type": result.get("answer_type", ""),
+        "confidence": result.get("confidence", ""),
+        "rewritten_question": result.get("rewritten_question", ""),
         "disambiguation_candidates": result.get("disambiguation_candidates", []),
     }
 

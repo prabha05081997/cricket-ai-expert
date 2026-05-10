@@ -51,6 +51,14 @@ def _debug(msg: str) -> None:
         print(f"[DEBUG] {msg}", flush=True)
 
 
+def _confidence_for_answer_type(answer_type: str) -> str:
+    if answer_type in {"analytics", "knowledge", "mixed"}:
+        return "high"
+    if answer_type in {"match_narrative_rag", "mixed_rag"}:
+        return "medium"
+    return "low"
+
+
 class ChatService:
     def __init__(
         self,
@@ -85,7 +93,13 @@ class ChatService:
                 "There is no single objective best batsman ever; it is subjective and depends "
                 "on format, era, conditions, and whether you value peak or longevity."
             )
-            result: dict[str, object] = {"answer": answer, "sources": []}
+            result: dict[str, object] = {
+                "answer": answer,
+                "sources": [],
+                "answer_type": "general",
+                "confidence": _confidence_for_answer_type("general"),
+                "rewritten_question": question,
+            }
             result["conversation_state"] = update_conversation_state(
                 conversation_state,
                 question,
@@ -265,6 +279,8 @@ class ChatService:
         # ------------------------------------------------------------------
         # Step 4: Update conversation state and return
         # ------------------------------------------------------------------
+        result["confidence"] = _confidence_for_answer_type(result.get("answer_type", "general"))
+        result["rewritten_question"] = resolved_question
         result["conversation_state"] = update_conversation_state(
             conversation_state,
             resolved_question,
