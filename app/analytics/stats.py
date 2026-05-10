@@ -22,6 +22,10 @@ class AggregateQuery:
     international_only: bool = False
     # For top-N queries
     limit: int = 1
+    # For ranked record queries such as "second highest score".
+    rank: int = 1
+    # For follow-up aggregate queries pinned to one match, e.g. "top scorer".
+    match_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -80,9 +84,16 @@ class AnalyticsQueryService:
                 if intent.intent == "player_dismissal" and intent.player:
                     return self._answer_player_dismissal(connection, question, intent)
 
+                if intent.intent == "match_narrative":
+                    return self._answer_match_narrative(connection, intent)
+
                 if intent.intent == "aggregate_stats":
                     # Career stats for a specific player — check before leaderboards
                     if intent.player:
+                        special = _answer_player_specific_aggregate(connection, intent)
+                        if special is not None:
+                            return special
+
                         career_q = _intent_to_career_query(intent)
                         if career_q is not None:
                             result = _answer_career_query(connection, career_q)
@@ -139,7 +150,10 @@ class AnalyticsQueryService:
         fact_sheet = str(sources[0].get("text", ""))
         prompt = (
             "You are a cricket stats assistant. Answer the question using ONLY the "
-            "career stats fact sheet below. Be concise — one or two sentences.\n"
+            "career stats fact sheet below.\n"
+            "If the question asks for 'career stats' or 'career record', include: "
+            "matches, innings, runs, highest score, average, centuries, fifties.\n"
+            "If the question asks for a specific stat (e.g. average, centuries), answer that directly.\n"
             "If the fact sheet does not contain the information needed "
             "(e.g. home/away splits, overseas records, venue-specific stats), "
             "say exactly: \"I don't have that breakdown in the current dataset.\"\n"
@@ -165,6 +179,81 @@ class AnalyticsQueryService:
         except Exception:
             return str(career_result.get("answer", ""))
 
+    def _answer_match_narrative(
+        self,
+        connection: sqlite3.Connection,
+        intent: "IntentResult",
+    ) -> dict[str, object] | None:
+        """Answer 'who won X?' questions from the analytics_matches table."""
+        lowered = intent.rewritten_question.lower()
+
+        # Build filters from intent
+        clauses: list[str] = ["1=1"]
+        params: list[object] = []
+
+        if intent.match_type:
+            allowed = _match_type_filters(intent.match_type)
+            ph = ", ".join("?" for _ in allowed)
+            clauses.append(f"match_type IN ({ph})")
+            params.extend(allowed)
+        if intent.year:
+            clauses.append("substr(date, 1, 4) = ?")
+            params.append(str(intent.year))
+        if intent.event:
+            normalized = _normalize_event_name(intent.event)
+            if normalized:
+                clauses.append(
+                    "(lower(event_name) LIKE ? OR ? LIKE '%' || lower(event_name) || '%')"
+                )
+                params.append(f"%{normalized.lower()}%")
+                params.append(normalized.lower())
+        if intent.team:
+            clauses.append(
+                "(lower(teams_csv) LIKE ?)"
+            )
+            params.append(f"%{intent.team.lower()}%")
+
+        # For "final" questions, take the last match by date in the event
+        is_final = "final" in lowered and "semi" not in lowered and "quarter" not in lowered
+        order = "date DESC" if is_final else "date DESC"
+
+        sql = f"""
+            SELECT match_id, teams_csv, outcome, date, event_name, match_type
+            FROM analytics_matches
+            WHERE {' AND '.join(clauses)}
+            ORDER BY {order}
+            LIMIT 1
+        """
+        row = connection.execute(sql, params).fetchone()
+        if row is None:
+            row = _find_match_result_fallback(connection, intent.rewritten_question)
+        if row is None or not row["outcome"]:
+            return None
+
+        answer = (
+            f"{row['teams_csv']} — {row['outcome']} "
+            f"({row['event_name'] or row['match_type']}, {row['date']})."
+        )
+        source_text = answer
+        return {
+            "answer": answer,
+            "sources": [{
+                "chunk_id": f"analytics:{row['match_id']}:narrative",
+                "score": 1.0,
+                "text": source_text,
+                "title": f"Match result: {row['teams_csv']}",
+                "player_name": "",
+                "display_name": "",
+                "teams": row["teams_csv"],
+                "match_id": row["match_id"],
+                "date": row["date"],
+                "match_type": row["match_type"] or "",
+                "event_name": row["event_name"] or "",
+                "venue": "",
+                "document_type": "analytics_result",
+            }],
+        }
+
     def _answer_player_performance(
         self,
         connection: sqlite3.Connection,
@@ -172,6 +261,7 @@ class AnalyticsQueryService:
         intent: IntentResult,
     ) -> dict[str, object] | None:
         from app.analytics.players import resolve_player_name
+        import re as _re
 
         # If we have a pinned match_id from context, use it directly
         if intent.pinned_match_id:
@@ -179,52 +269,94 @@ class AnalyticsQueryService:
                 player_name=intent.player,
                 match_id=intent.pinned_match_id,
             )
+            if "bowl" in intent.rewritten_question.lower() or "bowling" in intent.rewritten_question.lower():
+                return _answer_player_bowling_match_question(connection, pmq)
             return _answer_player_match_question(connection, pmq)
 
+        # Extract a specific date from the rewritten question if present
+        # e.g. "on 2014-11-13" → use as exact date filter
+        specific_date = None
+        date_match = _re.search(r'\b(\d{4}-\d{2}-\d{2})\b', intent.rewritten_question)
+        if date_match:
+            specific_date = date_match.group(1)
+
         # 1. Resolve player to all known aliases
-        candidates = resolve_player_name(connection, intent.player, limit=1)
+        candidates = resolve_player_name(connection, intent.player, limit=10)
         player_names: set[str] = {intent.player}
         player_id: int | None = None
         if candidates:
-            player_id = candidates[0].player_id
+            # Pick candidate with most data
+            best = max(candidates, key=lambda c: connection.execute(
+                "SELECT COUNT(*) as n FROM batting_performances WHERE player_id=?", (c.player_id,)
+            ).fetchone()["n"])
+            player_id = best.player_id
             alias_rows = connection.execute(
                 "SELECT alias FROM player_aliases WHERE player_id = ?", (player_id,)
             ).fetchall()
             for r in alias_rows:
                 player_names.add(str(r["alias"]).strip())
 
+        # If we have a specific date, query directly — no candidate search needed
+        if specific_date:
+            pmq = PlayerMatchQuery(
+                player_name=intent.player,
+                match_id=None,
+                year=None,
+                event_name=None,
+                match_type=intent.match_type,
+                team_terms=([intent.team] if intent.team else None),
+            )
+            # Override with date filter
+            placeholders = ", ".join("?" for _ in player_names)
+            clauses = [f"lower(bp.player_name) IN ({placeholders})", "bp.date = ?"]
+            params: list[object] = [n.lower() for n in player_names] + [specific_date]
+            if intent.match_type:
+                allowed = _match_type_filters(intent.match_type)
+                ph = ", ".join("?" for _ in allowed)
+                clauses.append(f"bp.match_type IN ({ph})")
+                params.extend(allowed)
+            sql = f"""
+                SELECT bp.match_id FROM batting_performances bp
+                WHERE {' AND '.join(clauses)} LIMIT 1
+            """
+            row = connection.execute(sql, params).fetchone()
+            if row:
+                pmq = PlayerMatchQuery(player_name=intent.player, match_id=str(row["match_id"]))
+                return _answer_player_match_question(connection, pmq)
+
         # 2. Find all candidate matches for this player with the given filters
-        match_candidates = _find_player_match_candidates(
-            connection, player_names, intent
-        )
+        match_candidates = _find_player_match_candidates(connection, player_names, intent)
 
         if not match_candidates:
             return None
 
-        # 3. If only one candidate, use it directly. Otherwise ask the LLM to pick.
+        # 3. Pick match: final → last by date; otherwise LLM selection
         chosen_match_id: str | None = None
         if len(match_candidates) == 1:
             chosen_match_id = str(match_candidates[0]["match_id"])
-        elif self._ollama_base_url:
-            from app.rag.intent import select_match
-            chosen_match_id = select_match(
-                question, match_candidates,
-                self._ollama_base_url, self._ollama_model,
-            )
+        else:
+            rewritten_lower = intent.rewritten_question.lower()
+            if "final" in rewritten_lower and "semi" not in rewritten_lower and "quarter" not in rewritten_lower:
+                chosen_match_id = str(match_candidates[-1]["match_id"])
+            elif self._ollama_base_url:
+                from app.rag.intent import select_match
+                llm_choice = select_match(
+                    question, match_candidates,
+                    self._ollama_base_url, self._ollama_model,
+                )
+                valid_ids = {m["match_id"] for m in match_candidates}
+                if llm_choice and llm_choice in valid_ids:
+                    chosen_match_id = llm_choice
 
-        # 4. Fall back to most recent match if LLM selection failed
         if not chosen_match_id:
-            chosen_match_id = str(match_candidates[-1]["match_id"])  # last = most recent
+            chosen_match_id = str(match_candidates[-1]["match_id"])
 
-        # 5. Query the actual performance for the chosen match
         pmq = PlayerMatchQuery(
             player_name=intent.player,
-            match_type=None,
-            event_name=None,
-            year=None,
-            team_terms=None,
-            match_id=chosen_match_id,  # pin to exact match
+            match_id=chosen_match_id,
         )
+        if "bowl" in intent.rewritten_question.lower() or "bowling" in intent.rewritten_question.lower():
+            return _answer_player_bowling_match_question(connection, pmq)
         return _answer_player_match_question(connection, pmq)
 
     def _answer_player_dismissal(
@@ -235,15 +367,80 @@ class AnalyticsQueryService:
     ) -> dict[str, object] | None:
         from app.analytics.players import resolve_player_name
 
-        candidates = resolve_player_name(connection, intent.player, limit=1)
+        candidates = resolve_player_name(connection, intent.player, limit=10)
+        # Pick the candidate with the most data
+        best_pid = candidates[0].player_id if candidates else None
+        best_n = 0
+        for c in candidates:
+            n = connection.execute(
+                "SELECT COUNT(*) as n FROM dismissals WHERE batter_player_id=?", (c.player_id,)
+            ).fetchone()["n"]
+            if n > best_n:
+                best_n = n
+                best_pid = c.player_id
+
         batter_names: set[str] = {intent.player}
-        if candidates:
+        if best_pid:
             alias_rows = connection.execute(
-                "SELECT alias FROM player_aliases WHERE player_id = ?",
-                (candidates[0].player_id,),
+                "SELECT alias FROM player_aliases WHERE player_id = ?", (best_pid,)
             ).fetchall()
             for r in alias_rows:
                 batter_names.add(str(r["alias"]).strip())
+
+        # Detect aggregate dismissal questions (career stats, not a specific match)
+        # Only treat as aggregate when there's no specific match context
+        lowered = intent.rewritten_question.lower()
+        has_match_context = bool(
+            intent.event or intent.year or
+            getattr(intent, "pinned_match_id", None) or
+            any(w in lowered for w in ["final", "semi-final", "world cup", "champions trophy", "ashes"])
+        )
+        is_aggregate = not has_match_context and any(phrase in lowered for phrase in [
+            "most times", "most often", "most common", "how many times",
+            "mode of dismissal", "dismissed most", "dismissed by most",
+            "who has dismissed", "most wickets against",
+        ])
+
+        if is_aggregate and best_pid:
+            # "who dismissed X most" → bowler leaderboard
+            if any(phrase in lowered for phrase in ["who dismissed", "who has dismissed", "most times dismissed by", "dismissed most"]):
+                row = connection.execute("""
+                    SELECT bowler_name, COUNT(*) as n
+                    FROM dismissals WHERE batter_player_id=?
+                    AND bowler_name IS NOT NULL AND bowler_name != 'None'
+                    GROUP BY bowler_name ORDER BY n DESC LIMIT 1
+                """, (best_pid,)).fetchone()
+                if row:
+                    from app.analytics.players import get_preferred_player_display_name
+                    batter_display = get_preferred_player_display_name(connection, best_pid, intent.player)
+                    answer = f"{row['bowler_name']} has dismissed {batter_display} the most times — {row['n']} times."
+                    return {"answer": answer, "sources": [{"chunk_id": f"analytics:dismissal_stats:{best_pid}",
+                        "score": 1.0, "text": answer, "title": "Dismissal stats",
+                        "player_name": intent.player, "display_name": batter_display,
+                        "match_id": "", "date": "", "match_type": "", "event_name": "",
+                        "venue": "", "document_type": "analytics_result"}]}
+
+            # "most common mode of dismissal"
+            if any(phrase in lowered for phrase in ["mode of dismissal", "most common", "how is", "how was"]):
+                rows = connection.execute("""
+                    SELECT dismissal_kind, COUNT(*) as n
+                    FROM dismissals WHERE batter_player_id=?
+                    GROUP BY dismissal_kind ORDER BY n DESC LIMIT 3
+                """, (best_pid,)).fetchall()
+                if rows:
+                    from app.analytics.players import get_preferred_player_display_name
+                    batter_display = get_preferred_player_display_name(connection, best_pid, intent.player)
+                    top = rows[0]
+                    breakdown = ", ".join(f"{r['dismissal_kind']} ({r['n']})" for r in rows)
+                    answer = (
+                        f"{batter_display}'s most common mode of dismissal is {top['dismissal_kind']} "
+                        f"({top['n']} times). Top 3: {breakdown}."
+                    )
+                    return {"answer": answer, "sources": [{"chunk_id": f"analytics:dismissal_mode:{best_pid}",
+                        "score": 1.0, "text": answer, "title": "Dismissal stats",
+                        "player_name": intent.player, "display_name": batter_display,
+                        "match_id": "", "date": "", "match_type": "", "event_name": "",
+                        "venue": "", "document_type": "analytics_result"}]}
 
         # If the intent carries a pinned match_id (from last_match_id in context),
         # use it directly — no candidate search needed, no LLM selection needed.
@@ -260,12 +457,19 @@ class AnalyticsQueryService:
         chosen_match_id: str | None = None
         if len(dismissal_candidates) == 1:
             chosen_match_id = str(dismissal_candidates[0]["match_id"])
-        elif self._ollama_base_url:
-            from app.rag.intent import select_match
-            chosen_match_id = select_match(
-                question, dismissal_candidates,
-                self._ollama_base_url, self._ollama_model,
-            )
+        else:
+            rewritten_lower = intent.rewritten_question.lower()
+            if "final" in rewritten_lower and "semi" not in rewritten_lower and "quarter" not in rewritten_lower:
+                chosen_match_id = str(dismissal_candidates[-1]["match_id"])
+            elif self._ollama_base_url:
+                from app.rag.intent import select_match
+                llm_choice = select_match(
+                    question, dismissal_candidates,
+                    self._ollama_base_url, self._ollama_model,
+                )
+                valid_ids = {m["match_id"] for m in dismissal_candidates}
+                if llm_choice and llm_choice in valid_ids:
+                    chosen_match_id = llm_choice
 
         if not chosen_match_id:
             chosen_match_id = str(dismissal_candidates[-1]["match_id"])
@@ -276,13 +480,30 @@ class AnalyticsQueryService:
     def _answer_aggregate(
         self, connection: sqlite3.Connection, parsed: "AggregateQuery"
     ) -> dict[str, object] | None:
+        if parsed.metric == "top_match_scorer" and parsed.match_id:
+            row = _query_top_match_scorer(connection, parsed.match_id)
+            if row is None:
+                return None
+            display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+            answer = (
+                f"The top scorer in that match was {display_name} with {row['runs']} runs "
+                f"for {row['innings_team']} against {row['opposition_team']}."
+            )
+            return {"answer": answer, "sources": [{"chunk_id": f"analytics:{parsed.match_id}:top_scorer",
+                "score": 1.0, "text": answer, "title": "Match top scorer",
+                "player_name": row["player_name"], "display_name": display_name,
+                "match_id": parsed.match_id, "date": row["date"], "match_type": row["match_type"] or "",
+                "event_name": row["event_name"] or "", "venue": row["venue"] or "",
+                "document_type": "analytics_result"}]}
+
         if parsed.metric == "highest_individual_score":
             row = _query_highest_individual_score(connection, parsed)
             if row is None:
                 return None
             display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+            rank_prefix = _rank_label(parsed.rank)
             answer = (
-                f"The highest individual score"
+                f"The {rank_prefix} individual score"
                 f"{_format_filter_suffix(parsed)} is {row['runs']} by {display_name} "
                 f"for {row['innings_team']} against {row['opposition_team']} on {row['date']}."
             )
@@ -518,6 +739,76 @@ class AnalyticsQueryService:
                              "event_name": "", "venue": parsed.venue or "", "document_type": "analytics_result"}],
             }
 
+        if parsed.metric == "most_sixes":
+            row = _query_most_sixes(connection, parsed)
+            if row is None:
+                return None
+            display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+            suffix = _format_filter_suffix(parsed)
+            answer = f"The player with the most sixes{suffix} is {display_name} with {row['total_sixes']} sixes."
+            return {"answer": answer, "sources": [{"chunk_id": f"analytics:player:{row['player_id']}:sixes",
+                "score": 1.0, "text": answer, "title": "Analytics aggregate result",
+                "player_name": row["player_name"], "display_name": display_name,
+                "match_id": "", "date": "", "match_type": parsed.match_type or "",
+                "event_name": "", "venue": "", "document_type": "analytics_result"}]}
+
+        if parsed.metric == "most_fours":
+            row = _query_most_fours(connection, parsed)
+            if row is None:
+                return None
+            display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+            suffix = _format_filter_suffix(parsed)
+            answer = f"The player with the most fours{suffix} is {display_name} with {row['total_fours']} fours."
+            return {"answer": answer, "sources": [{"chunk_id": f"analytics:player:{row['player_id']}:fours",
+                "score": 1.0, "text": answer, "title": "Analytics aggregate result",
+                "player_name": row["player_name"], "display_name": display_name,
+                "match_id": "", "date": "", "match_type": parsed.match_type or "",
+                "event_name": "", "venue": "", "document_type": "analytics_result"}]}
+
+        if parsed.metric == "most_potm":
+            row = _query_most_potm(connection, parsed)
+            if row is None:
+                return None
+            suffix = _format_filter_suffix(parsed)
+            answer = f"The player with the most Player of the Match awards{suffix} is {row['player']} with {row['count']} awards."
+            return {"answer": answer, "sources": [{"chunk_id": f"analytics:potm:{row['player']}",
+                "score": 1.0, "text": answer, "title": "Analytics aggregate result",
+                "player_name": row["player"], "display_name": row["player"],
+                "match_id": "", "date": "", "match_type": parsed.match_type or "",
+                "event_name": "", "venue": "", "document_type": "analytics_result"}]}
+
+        if parsed.metric == "best_year_runs":
+            row = _query_best_year_runs(connection, parsed)
+            if row is None:
+                return None
+            display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+            suffix = _format_filter_suffix(parsed)
+            answer = (
+                f"The most runs scored in a single calendar year{suffix} is {row['runs']} "
+                f"by {display_name} in {row['year']} ({row['innings']} innings)."
+            )
+            return {"answer": answer, "sources": [{"chunk_id": f"analytics:best_year:{row['player_id']}",
+                "score": 1.0, "text": answer, "title": "Analytics aggregate result",
+                "player_name": row["player_name"], "display_name": display_name,
+                "match_id": "", "date": str(row["year"]), "match_type": parsed.match_type or "",
+                "event_name": "", "venue": "", "document_type": "analytics_result"}]}
+
+        if parsed.metric == "most_wickets_year":
+            row = _query_most_wickets_year(connection, parsed)
+            if row is None:
+                return None
+            display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+            suffix = _format_filter_suffix(parsed)
+            answer = (
+                f"The most wickets taken in a single calendar year{suffix} is {row['wickets']} "
+                f"by {display_name} in {row['year']}."
+            )
+            return {"answer": answer, "sources": [{"chunk_id": f"analytics:best_year_wickets:{row['player_id']}",
+                "score": 1.0, "text": answer, "title": "Analytics aggregate result",
+                "player_name": row["player_name"], "display_name": display_name,
+                "match_id": "", "date": str(row["year"]), "match_type": parsed.match_type or "",
+                "event_name": "", "venue": "", "document_type": "analytics_result"}]}
+
         return None
 
 
@@ -713,13 +1004,58 @@ def _extract_match_type(question: str) -> str | None:
     """Offline fallback: extract match type from question text."""
     if "t20i" in question or "t20 international" in question or "international t20" in question:
         return "T20I"
-    if re.search(r"\bodi\b", question):
+    if re.search(r"\bodi\b", question) or "one day international" in question:
         return "ODI"
     if re.search(r"\btest\b", question):
         return "Test"
     if re.search(r"\bt20\b", question):
         return "T20"
     return None
+
+
+def _extract_venue(question: str) -> str | None:
+    """Extract obvious venue names when the intent LLM leaves venue empty."""
+    question = question.replace("’", "'")
+    if "lord" in question:
+        return "Lord"
+    known = [
+        "lord's cricket ground",
+        "lord's",
+        "lords",
+        "wankhede stadium",
+        "trent bridge",
+        "eden gardens",
+        "melbourne cricket ground",
+        "kennington oval",
+    ]
+    for venue in known:
+        if venue in question:
+            if venue in {"lord's cricket ground", "lord's", "lords"}:
+                return "Lord"
+            return venue.title()
+
+    match = re.search(r"\bat\s+([a-z0-9' .-]+?)(?:\?|$|\sin\s|\sfor\s)", question, flags=re.IGNORECASE)
+    if not match:
+        return None
+    candidate = match.group(1).strip()
+    if candidate.lower().startswith("least "):
+        return None
+    return _normalize_venue(candidate)
+
+
+def _normalize_venue(venue: str | None) -> str | None:
+    if not venue:
+        return None
+    lowered = venue.lower().replace("’", "'")
+    if "lord" in lowered:
+        return "Lord"
+    if "wankhede" in lowered:
+        return "Wankhede Stadium"
+    if "trent bridge" in lowered:
+        return "Trent Bridge"
+    if "eden gardens" in lowered:
+        return "Eden Gardens"
+    return venue.strip()
 
 
 def _answer_dismissal_question(
@@ -729,11 +1065,11 @@ def _answer_dismissal_question(
     from app.analytics.players import get_preferred_player_display_name, resolve_player_name
 
     # Resolve batter to all known aliases for the DB lookup
-    candidates = resolve_player_name(connection, query.batter_name, limit=1)
+    candidates = resolve_player_name(connection, query.batter_name, limit=10)
     batter_names: set[str] = {query.batter_name}
     batter_player_id: int | None = None
     if candidates:
-        batter_player_id = candidates[0].player_id
+        batter_player_id = _pick_player_with_most_data(connection, candidates)
         alias_rows = connection.execute(
             "SELECT alias FROM player_aliases WHERE player_id = ?",
             (batter_player_id,),
@@ -790,6 +1126,31 @@ def _answer_dismissal_question(
     """
     row = connection.execute(sql, params).fetchone()
     if row is None:
+        if query.match_id and batter_player_id:
+            played = connection.execute(
+                """
+                SELECT bp.player_name, bp.player_id, am.teams_csv, bp.date, bp.match_type, bp.event_name
+                FROM batting_performances bp
+                JOIN analytics_matches am ON am.match_id = bp.match_id
+                WHERE bp.match_id = ? AND bp.player_id = ?
+                LIMIT 1
+                """,
+                (query.match_id, batter_player_id),
+            ).fetchone()
+            if played is not None:
+                batter_display = get_preferred_player_display_name(
+                    connection, batter_player_id, str(played["player_name"])
+                )
+                answer = f"{batter_display} was not out in {played['teams_csv']} on {played['date']}."
+                return {"answer": answer, "sources": [{
+                    "chunk_id": f"analytics:{query.match_id}:dismissal:not_out:{batter_player_id}",
+                    "score": 1.0, "text": answer, "title": "Dismissal record",
+                    "player_name": str(played["player_name"]), "display_name": batter_display,
+                    "teams": str(played["teams_csv"] or ""), "match_id": query.match_id,
+                    "date": str(played["date"] or ""), "match_type": str(played["match_type"] or ""),
+                    "event_name": str(played["event_name"] or ""), "venue": "",
+                    "document_type": "analytics_result",
+                }]}
         return None
 
     # Resolve display names — always use the player_id from the row itself,
@@ -868,6 +1229,9 @@ def _intent_to_aggregate_query(intent: IntentResult) -> AggregateQuery | None:
     """Convert an IntentResult with aggregate_stats intent into an AggregateQuery."""
     lowered = (intent.rewritten_question or "").lower()
     metric = intent.metric or ""
+    inferred_match_type = intent.match_type or _extract_match_type(lowered)
+    inferred_venue = _normalize_venue(intent.venue) or _extract_venue(lowered)
+    pinned_match_id = getattr(intent, "pinned_match_id", None)
 
     # Map LLM metric field values to internal metric names
     metric_map = {
@@ -879,18 +1243,45 @@ def _intent_to_aggregate_query(intent: IntentResult) -> AggregateQuery | None:
         "economy": "best_economy",
         "economy_rate": "best_economy",
         "bowling_average": "best_economy",
-        "strike_rate": "most_runs",  # SR leaderboard → most runs proxy
+        "strike_rate": "most_runs",
+        "sixes": "most_sixes",
+        "fours": "most_fours",
     }
     resolved = metric_map.get(metric)
 
     # Detect top-N intent first — overrides metric mapping for leaderboard questions
     import re as _re
     top_n_match = _re.search(r"\btop\s+(\d+)\b", lowered)
+    # Also detect "second highest", "third highest" etc.
+    nth_match = _re.search(r"\b(second|third|fourth|fifth|2nd|3rd|4th|5th)\s+highest\b", lowered)
+    nth_map = {"second": 2, "2nd": 2, "third": 3, "3rd": 3, "fourth": 4, "4th": 4, "fifth": 5, "5th": 5}
     limit = int(top_n_match.group(1)) if top_n_match else 1
+    if nth_match:
+        nth_word = nth_match.group(1).lower()
+        limit = nth_map.get(nth_word, 1)
+    rank = limit if nth_match else 1
+
+    # Textual cues should override a too-generic LLM metric.
+    if "top scorer" in lowered and pinned_match_id:
+        resolved = "top_match_scorer"
+    elif re.search(r"\bbest\b.*\byear\b", lowered) or "most runs in a year" in lowered or "most runs in a single year" in lowered:
+        resolved = "best_year_runs"
+    elif re.search(r"\bmost\b.*\bwickets\b.*\byear\b", lowered):
+        resolved = "most_wickets_year"
+    elif "most sixes" in lowered or "sixes" in lowered:
+        resolved = "most_sixes"
+    elif "most fours" in lowered or "fours" in lowered:
+        resolved = "most_fours"
+    elif "player of the match" in lowered or "potm" in lowered or "man of the match" in lowered:
+        resolved = "most_potm"
+    elif ("most runs" in lowered or "most run" in lowered or "run scorer" in lowered) and inferred_venue:
+        resolved = "most_runs_venue"
+    elif ("most wickets" in lowered or "most wicket" in lowered) and inferred_venue:
+        resolved = "most_wickets_venue"
 
     # When top-N is requested, "highest_score" likely means "most runs" leaderboard
-    if top_n_match and resolved == "highest_individual_score":
-        if "run scorer" in lowered or "run scorer" in lowered or "batting" in lowered:
+    if (top_n_match or limit > 1) and resolved == "highest_individual_score" and not nth_match:
+        if "run scorer" in lowered or "batting" in lowered:
             resolved = "most_runs"
         elif "wicket" in lowered or "bowler" in lowered:
             resolved = "most_wickets"
@@ -903,9 +1294,15 @@ def _intent_to_aggregate_query(intent: IntentResult) -> AggregateQuery | None:
             resolved = "best_batting_average"
         elif "economy" in lowered and ("best" in lowered or "lowest" in lowered):
             resolved = "best_economy"
-        elif ("most runs" in lowered or "most run" in lowered or "run scorer" in lowered) and intent.venue:
+        elif "most sixes" in lowered or "sixes" in lowered:
+            resolved = "most_sixes"
+        elif "most fours" in lowered or "fours" in lowered:
+            resolved = "most_fours"
+        elif "player of the match" in lowered or "potm" in lowered or "man of the match" in lowered:
+            resolved = "most_potm"
+        elif ("most runs" in lowered or "most run" in lowered or "run scorer" in lowered) and inferred_venue:
             resolved = "most_runs_venue"
-        elif ("most wickets" in lowered or "most wicket" in lowered) and intent.venue:
+        elif ("most wickets" in lowered or "most wicket" in lowered) and inferred_venue:
             resolved = "most_wickets_venue"
         elif "most runs" in lowered or "most run" in lowered or "run scorer" in lowered:
             resolved = "most_runs"
@@ -919,12 +1316,59 @@ def _intent_to_aggregate_query(intent: IntentResult) -> AggregateQuery | None:
 
     return AggregateQuery(
         metric=resolved,
-        match_type=intent.match_type,
+        match_type=inferred_match_type,
         year=intent.year,
-        venue=intent.venue,
+        venue=inferred_venue,
         international_only=bool(intent.event and "international" in (intent.event or "").lower()),
         limit=min(limit, 10),  # cap at 10
+        rank=rank,
+        match_id=pinned_match_id,
     )
+
+
+def _find_match_result_fallback(
+    connection: sqlite3.Connection,
+    question: str,
+) -> sqlite3.Row | None:
+    lowered = question.lower()
+    event: str | None = None
+    if "champions trophy" in lowered:
+        event = "champions trophy"
+    elif "world cup" in lowered:
+        event = "world cup"
+    if not event:
+        return None
+
+    clauses = ["lower(event_name) LIKE ?"]
+    params: list[object] = [f"%{event}%"]
+    year_match = re.search(r"\b(19|20)\d{2}\b", lowered)
+    if year_match:
+        clauses.append("substr(date, 1, 4) = ?")
+        params.append(year_match.group(0))
+
+    for team in _known_team_names():
+        if team in lowered:
+            clauses.append("lower(teams_csv) LIKE ?")
+            params.append(f"%{team}%")
+
+    return connection.execute(
+        f"""
+        SELECT match_id, teams_csv, outcome, date, event_name, match_type
+        FROM analytics_matches
+        WHERE {' AND '.join(clauses)}
+        ORDER BY date DESC
+        LIMIT 1
+        """,
+        params,
+    ).fetchone()
+
+
+def _known_team_names() -> list[str]:
+    return [
+        "india", "australia", "england", "pakistan", "sri lanka", "new zealand",
+        "south africa", "west indies", "bangladesh", "zimbabwe", "afghanistan",
+        "ireland", "scotland", "netherlands", "kenya", "canada", "uae",
+    ]
 
 
 def _intent_to_career_query(intent: IntentResult) -> "PlayerCareerQuery | None":
@@ -936,9 +1380,17 @@ def _intent_to_career_query(intent: IntentResult) -> "PlayerCareerQuery | None":
     """
     if not intent.player:
         return None
+
+    # Use match_type from intent, but also try to infer it from the rewritten
+    # question when the LLM didn't extract it (e.g. "Test batting average" →
+    # match_type should be "Test" even if intent.match_type is None).
+    match_type = intent.match_type
+    if not match_type:
+        match_type = _extract_match_type((intent.rewritten_question or "").lower())
+
     return PlayerCareerQuery(
         player_name=intent.player,
-        match_type=intent.match_type,
+        match_type=match_type,
         year=intent.year,
         event_name=intent.event,
     )
@@ -975,6 +1427,91 @@ def _intent_to_head_to_head(intent: IntentResult) -> "HeadToHeadQuery | None":
     )
 
 
+def _answer_player_specific_aggregate(
+    connection: sqlite3.Connection,
+    intent: IntentResult,
+) -> dict[str, object] | None:
+    """Answer precise player aggregate questions deterministically."""
+    from app.analytics.players import get_preferred_player_display_name, resolve_player_name
+
+    lowered = (intent.rewritten_question or "").lower()
+    candidates = resolve_player_name(connection, intent.player or "", limit=10)
+    if not candidates:
+        return None
+
+    player_id = _pick_player_with_most_data(connection, candidates)
+    display_name = get_preferred_player_display_name(connection, player_id, intent.player)
+    match_type = intent.match_type or _extract_match_type(lowered)
+
+    if "overseas" in lowered or "home" in lowered or "away" in lowered:
+        answer = "I don't have that breakdown in the current dataset."
+        return _simple_player_source(answer, player_id, display_name, match_type)
+
+    if intent.event and ("how many runs" in lowered or "total runs" in lowered):
+        row = _query_player_event_runs(connection, player_id, intent.event, intent.year, match_type)
+        if row is not None:
+            event_name = _normalize_event_name(intent.event) or intent.event
+            answer = f"{display_name} scored {row['total_runs']} runs in the {intent.year or ''} {event_name}.".replace("  ", " ")
+            return _simple_player_source(answer, player_id, display_name, match_type)
+
+    if "player of the match" in lowered or "potm" in lowered or "man of the match" in lowered:
+        count = _query_player_potm_count(connection, player_id, match_type, intent.year)
+        if count is None:
+            return None
+        answer = f"{display_name} has won {count} Player of the Match awards{_format_simple_scope(match_type, intent.year)}."
+        return _simple_player_source(answer, player_id, display_name, match_type)
+
+    if "compare" in lowered and "kohli" in lowered and "average" in lowered:
+        other_candidates = resolve_player_name(connection, "Virat Kohli", limit=10)
+        if other_candidates:
+            other_id = _pick_player_with_most_data(connection, other_candidates)
+            row1 = _query_player_batting_summary(connection, player_id, match_type, intent.year)
+            row2 = _query_player_batting_summary(connection, other_id, match_type, intent.year)
+            if row1 is not None and row2 is not None:
+                other_name = get_preferred_player_display_name(connection, other_id, "Virat Kohli")
+                answer = (
+                    f"{display_name}'s batting average{_format_simple_scope(match_type, intent.year)} "
+                    f"is {row1['average']}; {other_name}'s is {row2['average']}."
+                )
+                return _simple_player_source(answer, player_id, display_name, match_type)
+
+    if re.search(r"\bbest\b.*\byear\b", lowered) or "sabse acha" in lowered:
+        row = _query_player_best_year_runs(connection, player_id, match_type)
+        if row is None:
+            return None
+        answer = f"{display_name}'s best year by runs{_format_simple_scope(match_type, None)} was {row['year']} with {row['runs']} runs."
+        return _simple_player_source(answer, player_id, display_name, match_type)
+
+    if intent.year and ("average" in lowered or "batting average" in lowered):
+        row = _query_player_batting_summary(connection, player_id, match_type, intent.year)
+        if row is None:
+            return None
+        answer = (
+            f"{display_name}'s batting average{_format_simple_scope(match_type, intent.year)} "
+            f"was {row['average']} ({row['total_runs']} runs, {row['dismissals']} dismissals)."
+        )
+        return _simple_player_source(answer, player_id, display_name, match_type)
+
+    if "wicket" in lowered:
+        row = _query_player_bowling_summary(connection, player_id, match_type, intent.year)
+        if row is None or row["total_wickets"] is None:
+            return None
+        answer = f"{display_name} has taken {row['total_wickets']} wickets{_format_simple_scope(match_type, intent.year)}."
+        return _simple_player_source(answer, player_id, display_name, match_type)
+
+    if "batting average" in lowered or "average" in lowered:
+        row = _query_player_batting_summary(connection, player_id, match_type, intent.year)
+        if row is None:
+            return None
+        answer = (
+            f"{display_name}'s batting average{_format_simple_scope(match_type, intent.year)} "
+            f"is {row['average']} ({row['total_runs']} runs)."
+        )
+        return _simple_player_source(answer, player_id, display_name, match_type)
+
+    return None
+
+
 def _query_highest_individual_score(connection: sqlite3.Connection, parsed: AggregateQuery) -> sqlite3.Row | None:
     clauses = ["1=1"]
     params: list[object] = []
@@ -995,7 +1532,7 @@ def _query_highest_individual_score(connection: sqlite3.Connection, parsed: Aggr
         FROM batting_performances bp
         WHERE {' AND '.join(clauses)}
         ORDER BY bp.runs DESC, bp.balls ASC, bp.date ASC
-        LIMIT 1
+        LIMIT 1 OFFSET {max(parsed.rank - 1, 0)}
     """
     return connection.execute(sql, params).fetchone()
 
@@ -1128,7 +1665,7 @@ def _query_best_batting_average(
             AND lower(d.batter_name) = lower(bp.player_name)
         WHERE {where}
         GROUP BY bp.player_id, bp.player_name
-        HAVING innings >= 10
+        HAVING innings >= 30
         ORDER BY average DESC, total_runs DESC
         LIMIT {parsed.limit}
     """
@@ -1238,6 +1775,307 @@ def _query_most_wickets_venue(
     return connection.execute(sql, params).fetchone()
 
 
+def _query_most_sixes(connection: sqlite3.Connection, parsed: AggregateQuery) -> sqlite3.Row | None:
+    clauses = ["1=1"]
+    params: list[object] = []
+    _apply_common_filters(clauses, params, parsed, table_alias="bp")
+    sql = f"""
+        SELECT player_id, player_name, SUM(sixes) AS total_sixes
+        FROM batting_performances bp
+        WHERE {' AND '.join(clauses)}
+        GROUP BY player_id, player_name ORDER BY total_sixes DESC LIMIT 1
+    """
+    return connection.execute(sql, params).fetchone()
+
+
+def _query_most_fours(connection: sqlite3.Connection, parsed: AggregateQuery) -> sqlite3.Row | None:
+    clauses = ["1=1"]
+    params: list[object] = []
+    _apply_common_filters(clauses, params, parsed, table_alias="bp")
+    sql = f"""
+        SELECT player_id, player_name, SUM(fours) AS total_fours
+        FROM batting_performances bp
+        WHERE {' AND '.join(clauses)}
+        GROUP BY player_id, player_name ORDER BY total_fours DESC LIMIT 1
+    """
+    return connection.execute(sql, params).fetchone()
+
+
+def _query_most_potm(connection: sqlite3.Connection, parsed: AggregateQuery) -> sqlite3.Row | None:
+    clauses = ["player_of_match_csv != ''", "player_of_match_csv NOT LIKE '%,%'"]
+    params: list[object] = []
+    if parsed.match_type:
+        allowed = _match_type_filters(parsed.match_type)
+        ph = ", ".join("?" for _ in allowed)
+        clauses.append(f"match_type IN ({ph})")
+        params.extend(allowed)
+    if parsed.year:
+        clauses.append("substr(date, 1, 4) = ?")
+        params.append(str(parsed.year))
+    sql = f"""
+        SELECT player_of_match_csv AS player, COUNT(*) AS count
+        FROM analytics_matches
+        WHERE {' AND '.join(clauses)}
+        GROUP BY player_of_match_csv ORDER BY count DESC LIMIT 1
+    """
+    return connection.execute(sql, params).fetchone()
+
+
+def _query_best_year_runs(connection: sqlite3.Connection, parsed: AggregateQuery) -> sqlite3.Row | None:
+    """Most runs by any player in a single calendar year."""
+    clauses = ["1=1"]
+    params: list[object] = []
+    if parsed.match_type:
+        allowed = _match_type_filters(parsed.match_type)
+        ph = ", ".join("?" for _ in allowed)
+        clauses.append(f"match_type IN ({ph})")
+        params.extend(allowed)
+    sql = f"""
+        SELECT player_id, player_name, substr(date, 1, 4) AS year,
+               SUM(runs) AS runs, COUNT(*) AS innings
+        FROM batting_performances
+        WHERE {' AND '.join(clauses)}
+        GROUP BY player_id, player_name, year
+        ORDER BY runs DESC LIMIT 1
+    """
+    return connection.execute(sql, params).fetchone()
+
+
+def _query_most_wickets_year(connection: sqlite3.Connection, parsed: AggregateQuery) -> sqlite3.Row | None:
+    """Most wickets by any bowler in a single calendar year."""
+    clauses = ["1=1"]
+    params: list[object] = []
+    if parsed.match_type:
+        allowed = _match_type_filters(parsed.match_type)
+        ph = ", ".join("?" for _ in allowed)
+        clauses.append(f"match_type IN ({ph})")
+        params.extend(allowed)
+    sql = f"""
+        SELECT player_id, player_name, substr(date, 1, 4) AS year,
+               SUM(wickets) AS wickets
+        FROM bowling_performances
+        WHERE {' AND '.join(clauses)}
+        GROUP BY player_id, player_name, year
+        ORDER BY wickets DESC LIMIT 1
+    """
+    return connection.execute(sql, params).fetchone()
+
+
+def _query_top_match_scorer(connection: sqlite3.Connection, match_id: str) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        SELECT player_id, player_name, innings_team, opposition_team, runs, balls,
+               match_type, date, venue, event_name
+        FROM batting_performances
+        WHERE match_id = ?
+        ORDER BY runs DESC, balls ASC
+        LIMIT 1
+        """,
+        (match_id,),
+    ).fetchone()
+
+
+def _pick_player_with_most_data(connection: sqlite3.Connection, candidates: list[object]) -> int:
+    best_player_id = int(getattr(candidates[0], "player_id"))
+    best_total = -1
+    for candidate in candidates:
+        player_id = int(getattr(candidate, "player_id"))
+        row = connection.execute(
+            """
+            SELECT
+              (SELECT COUNT(*) FROM batting_performances WHERE player_id = ?) +
+              (SELECT COUNT(*) FROM bowling_performances WHERE player_id = ?) AS n
+            """,
+            (player_id, player_id),
+        ).fetchone()
+        total = int(row["n"] or 0) if row else 0
+        if total > best_total:
+            best_total = total
+            best_player_id = player_id
+    return best_player_id
+
+
+def _query_player_batting_summary(
+    connection: sqlite3.Connection,
+    player_id: int,
+    match_type: str | None,
+    year: int | None,
+) -> sqlite3.Row | None:
+    clauses = ["bp.player_id = ?"]
+    params: list[object] = [player_id]
+    if match_type:
+        allowed = _match_type_filters(match_type)
+        clauses.append(f"bp.match_type IN ({', '.join('?' for _ in allowed)})")
+        params.extend(allowed)
+    if year:
+        clauses.append("substr(bp.date, 1, 4) = ?")
+        params.append(str(year))
+    row = connection.execute(
+        f"""
+        SELECT SUM(bp.runs) AS total_runs,
+               COUNT(*) AS innings,
+               COUNT(d.batter_player_id) AS dismissals,
+               ROUND(CAST(SUM(bp.runs) AS REAL) / NULLIF(COUNT(d.batter_player_id), 0), 2) AS average
+        FROM batting_performances bp
+        LEFT JOIN dismissals d
+          ON d.match_id = bp.match_id
+         AND d.innings_number = bp.innings_number
+         AND d.batter_player_id = bp.player_id
+        WHERE {' AND '.join(clauses)}
+        """,
+        params,
+    ).fetchone()
+    if row is None or row["innings"] is None or int(row["innings"]) == 0:
+        return None
+    return row
+
+
+def _query_player_bowling_summary(
+    connection: sqlite3.Connection,
+    player_id: int,
+    match_type: str | None,
+    year: int | None,
+) -> sqlite3.Row | None:
+    clauses = ["player_id = ?"]
+    params: list[object] = [player_id]
+    if match_type:
+        allowed = _match_type_filters(match_type)
+        clauses.append(f"match_type IN ({', '.join('?' for _ in allowed)})")
+        params.extend(allowed)
+    if year:
+        clauses.append("substr(date, 1, 4) = ?")
+        params.append(str(year))
+    return connection.execute(
+        f"SELECT SUM(wickets) AS total_wickets FROM bowling_performances WHERE {' AND '.join(clauses)}",
+        params,
+    ).fetchone()
+
+
+def _query_player_best_year_runs(
+    connection: sqlite3.Connection,
+    player_id: int,
+    match_type: str | None,
+) -> sqlite3.Row | None:
+    clauses = ["player_id = ?"]
+    params: list[object] = [player_id]
+    if match_type:
+        allowed = _match_type_filters(match_type)
+        clauses.append(f"match_type IN ({', '.join('?' for _ in allowed)})")
+        params.extend(allowed)
+    return connection.execute(
+        f"""
+        SELECT substr(date, 1, 4) AS year, SUM(runs) AS runs, COUNT(*) AS innings
+        FROM batting_performances
+        WHERE {' AND '.join(clauses)}
+        GROUP BY year
+        ORDER BY runs DESC
+        LIMIT 1
+        """,
+        params,
+    ).fetchone()
+
+
+def _query_player_event_runs(
+    connection: sqlite3.Connection,
+    player_id: int,
+    event_name: str,
+    year: int | None,
+    match_type: str | None,
+) -> sqlite3.Row | None:
+    normalized_event = _normalize_event_name(event_name)
+    clauses = ["player_id = ?"]
+    params: list[object] = [player_id]
+    if normalized_event:
+        clauses.append("(lower(event_name) LIKE ? OR ? LIKE '%' || lower(event_name) || '%')")
+        params.append(f"%{normalized_event.lower()}%")
+        params.append(normalized_event.lower())
+    if year:
+        clauses.append("substr(date, 1, 4) = ?")
+        params.append(str(year))
+    if match_type:
+        allowed = _match_type_filters(match_type)
+        clauses.append(f"match_type IN ({', '.join('?' for _ in allowed)})")
+        params.extend(allowed)
+    row = connection.execute(
+        f"""
+        SELECT SUM(runs) AS total_runs, COUNT(*) AS innings
+        FROM batting_performances
+        WHERE {' AND '.join(clauses)}
+        """,
+        params,
+    ).fetchone()
+    if row is None or row["innings"] is None or int(row["innings"]) == 0:
+        return None
+    return row
+
+
+def _query_player_potm_count(
+    connection: sqlite3.Connection,
+    player_id: int,
+    match_type: str | None,
+    year: int | None,
+) -> int | None:
+    aliases = [r["alias"].lower() for r in connection.execute(
+        "SELECT alias FROM player_aliases WHERE player_id = ?", (player_id,)
+    ).fetchall()]
+    if not aliases:
+        return None
+    clauses = ["player_of_match_csv != ''"]
+    params: list[object] = []
+    if match_type:
+        allowed = _match_type_filters(match_type)
+        clauses.append(f"match_type IN ({', '.join('?' for _ in allowed)})")
+        params.extend(allowed)
+    if year:
+        clauses.append("substr(date, 1, 4) = ?")
+        params.append(str(year))
+    rows = connection.execute(
+        f"SELECT player_of_match_csv FROM analytics_matches WHERE {' AND '.join(clauses)}",
+        params,
+    ).fetchall()
+    count = 0
+    alias_set = set(aliases)
+    for row in rows:
+        winners = [part.strip().lower() for part in str(row["player_of_match_csv"]).split(",")]
+        if any(winner in alias_set for winner in winners):
+            count += 1
+    return count
+
+
+def _format_simple_scope(match_type: str | None, year: int | None) -> str:
+    bits = []
+    if match_type:
+        bits.append(match_type)
+    if year:
+        bits.append(str(year))
+    return f" in {' '.join(bits)}" if bits else ""
+
+
+def _simple_player_source(
+    answer: str,
+    player_id: int,
+    display_name: str,
+    match_type: str | None,
+) -> dict[str, object]:
+    return {"answer": answer, "sources": [{"chunk_id": f"analytics:player:{player_id}:specific",
+        "score": 1.0, "text": answer, "title": "Player aggregate stat",
+        "player_name": display_name, "display_name": display_name,
+        "match_id": "", "date": "", "match_type": match_type or "",
+        "event_name": "", "venue": "", "document_type": "analytics_result"}]}
+
+
+def _rank_label(rank: int) -> str:
+    if rank == 2:
+        return "second highest"
+    if rank == 3:
+        return "third highest"
+    if rank == 4:
+        return "fourth highest"
+    if rank == 5:
+        return "fifth highest"
+    return "highest"
+
+
 def _answer_career_query(
     connection: sqlite3.Connection,
     query: PlayerCareerQuery,
@@ -1275,24 +2113,18 @@ def _answer_career_query(
     placeholders = ", ".join("?" for _ in player_names)
     params: list[object] = [n.lower() for n in player_names]
 
-    # Build filters
-    bat_clauses = [f"lower(bp.player_name) IN ({placeholders})"]
-    bowl_clauses = [f"lower(bp.player_name) IN ({placeholders})"]
-    bat_params = list(params)
-    bowl_params = list(params)
+    # Build filters — use player_id directly for reliability
+    bat_clauses = ["bp.player_id = ?"]
+    bat_params: list[object] = [player_id]
 
     if query.match_type:
         allowed = _match_type_filters(query.match_type)
         ph = ", ".join("?" for _ in allowed)
         bat_clauses.append(f"bp.match_type IN ({ph})")
-        bowl_clauses.append(f"bp.match_type IN ({ph})")
         bat_params.extend(allowed)
-        bowl_params.extend(allowed)
     if query.year:
         bat_clauses.append("substr(bp.date, 1, 4) = ?")
-        bowl_clauses.append("substr(bp.date, 1, 4) = ?")
         bat_params.append(str(query.year))
-        bowl_params.append(str(query.year))
 
     # Batting stats
     bat_row = connection.execute(f"""
@@ -1304,30 +2136,36 @@ def _answer_career_query(
             ROUND(AVG(bp.strike_rate), 1) AS avg_sr,
             SUM(bp.fours) AS fours,
             SUM(bp.sixes) AS sixes,
-            COUNT(d.batter_name) AS dismissals,
-            ROUND(CAST(SUM(bp.runs) AS REAL) / NULLIF(COUNT(d.batter_name), 0), 2) AS average,
+            COUNT(d.batter_player_id) AS dismissals,
+            ROUND(CAST(SUM(bp.runs) AS REAL) / NULLIF(COUNT(d.batter_player_id), 0), 2) AS average,
             SUM(CASE WHEN bp.runs >= 100 THEN 1 ELSE 0 END) AS centuries,
             SUM(CASE WHEN bp.runs >= 50 AND bp.runs < 100 THEN 1 ELSE 0 END) AS fifties
         FROM batting_performances bp
         LEFT JOIN dismissals d
             ON d.match_id = bp.match_id
             AND d.innings_number = bp.innings_number
-            AND lower(d.batter_name) = lower(bp.player_name)
+            AND d.batter_player_id = bp.player_id
         WHERE {' AND '.join(bat_clauses)}
     """, bat_params).fetchone()
 
-    # Bowling stats
+    # Bowling stats — query by player_id directly (more reliable than name matching)
     bowl_row = connection.execute(f"""
         SELECT
             SUM(bp.wickets) AS total_wickets,
+            COUNT(DISTINCT bp.match_id) AS match_count,
             SUM(bp.runs_conceded) AS runs_conceded,
             SUM(bp.balls_bowled) AS balls_bowled,
             ROUND(CAST(SUM(bp.runs_conceded) * 6.0 AS REAL) / NULLIF(SUM(bp.balls_bowled), 0), 2) AS economy,
             MAX(bp.wickets) AS best_wickets,
-            MIN(CASE WHEN bp.wickets = (SELECT MAX(wickets) FROM bowling_performances WHERE lower(player_name) IN ({placeholders})) THEN bp.runs_conceded ELSE NULL END) AS best_runs
+            MIN(CASE WHEN bp.wickets = (SELECT MAX(wickets) FROM bowling_performances WHERE player_id = ?) THEN bp.runs_conceded ELSE NULL END) AS best_runs
         FROM bowling_performances bp
-        WHERE {' AND '.join(bowl_clauses)}
-    """, bowl_params + list(params)).fetchone()
+        WHERE bp.player_id = ?
+        {("AND bp.match_type IN (" + ", ".join("?" for _ in _match_type_filters(query.match_type)) + ")") if query.match_type else ""}
+        {("AND substr(bp.date, 1, 4) = ?") if query.year else ""}
+    """, [player_id, player_id]
+        + (_match_type_filters(query.match_type) if query.match_type else [])
+        + ([str(query.year)] if query.year else [])
+    ).fetchone()
 
     if bat_row is None or bat_row["matches"] == 0:
         # Try broader match type filter (T20I data may be stored as T20)
@@ -1380,7 +2218,7 @@ def _answer_career_query(
     )
     if bowl_row and bowl_row["total_wickets"] and int(bowl_row["total_wickets"]) > 0:
         source_text += (
-            f" Bowling: {bowl_row['total_wickets']} wickets, "
+            f" Bowling: {bowl_row['total_wickets']} wickets in {bowl_row['match_count']} matches, "
             f"economy {bowl_row['economy'] or 'N/A'}, "
             f"best figures {bowl_row['best_wickets']}/{bowl_row['best_runs'] or '?'}."
         )
@@ -1531,11 +2369,31 @@ def _find_player_match_candidates(
             )
             params.append(f"%{normalized.lower()}%")
             params.append(normalized.lower())
-    if intent.team:
+    venue_filter = intent.venue or _extract_venue((intent.rewritten_question or "").lower())
+    if venue_filter:
+        clauses.append("lower(bp.venue) LIKE ?")
+        params.append(f"%{venue_filter.lower()}%")
+
+    # Use intent.team if available; otherwise try to extract opposition from rewritten question
+    team_filter = intent.team
+    if not team_filter:
+        # Extract known team names from the rewritten question
+        _KNOWN_TEAMS = [
+            "india", "australia", "england", "pakistan", "sri lanka", "new zealand",
+            "south africa", "west indies", "bangladesh", "zimbabwe", "afghanistan",
+            "ireland", "scotland", "netherlands", "kenya", "canada", "uae",
+        ]
+        lowered_q = (intent.rewritten_question or "").lower()
+        for team in _KNOWN_TEAMS:
+            if team in lowered_q:
+                team_filter = team
+                break
+
+    if team_filter:
         clauses.append(
             "(lower(am.teams_csv) LIKE ? OR lower(bp.innings_team) LIKE ? OR lower(bp.opposition_team) LIKE ?)"
         )
-        params.extend([f"%{intent.team.lower()}%"] * 3)
+        params.extend([f"%{team_filter.lower()}%"] * 3)
 
     sql = f"""
         SELECT DISTINCT bp.match_id, bp.date, am.teams_csv, bp.event_name
@@ -1602,11 +2460,11 @@ def _find_dismissal_candidates(
 def _answer_player_match_question(connection: sqlite3.Connection, query: PlayerMatchQuery) -> dict[str, object] | None:
     from app.analytics.players import get_preferred_player_display_name, normalize_person_name, resolve_player_name
 
-    candidates = resolve_player_name(connection, query.player_name, limit=3)
+    candidates = resolve_player_name(connection, query.player_name, limit=10)
     player_names = {str(query.player_name)}
     player_id: int | None = None
     if candidates:
-        player_id = candidates[0].player_id
+        player_id = _pick_player_with_most_data(connection, candidates)
         alias_rows = connection.execute(
             "SELECT alias, normalized_alias FROM player_aliases WHERE player_id = ?",
             (player_id,),
@@ -1645,7 +2503,8 @@ def _answer_player_match_question(connection: sqlite3.Connection, query: PlayerM
         if query.team_terms:
             for term in query.team_terms:
                 clauses.append("(lower(am.teams_csv) LIKE ? OR lower(bp.innings_team) LIKE ? OR lower(bp.opposition_team) LIKE ?)")
-                params.extend([f"%{term}%", f"%{term}%", f"%{term}%"])
+                lowered_term = term.lower()
+                params.extend([f"%{lowered_term}%", f"%{lowered_term}%", f"%{lowered_term}%"])
 
     sql = f"""
         SELECT
@@ -1721,3 +2580,64 @@ def _answer_player_match_question(connection: sqlite3.Connection, query: PlayerM
             }
         ],
     }
+
+
+def _answer_player_bowling_match_question(connection: sqlite3.Connection, query: PlayerMatchQuery) -> dict[str, object] | None:
+    from app.analytics.players import get_preferred_player_display_name, resolve_player_name
+
+    candidates = resolve_player_name(connection, query.player_name, limit=10)
+    if not candidates:
+        return None
+    player_id = _pick_player_with_most_data(connection, candidates)
+
+    clauses = ["bw.player_id = ?"]
+    params: list[object] = [player_id]
+    if query.match_id:
+        clauses.append("bw.match_id = ?")
+        params.append(query.match_id)
+    else:
+        if query.match_type:
+            allowed = _match_type_filters(query.match_type)
+            clauses.append(f"bw.match_type IN ({', '.join('?' for _ in allowed)})")
+            params.extend(allowed)
+        if query.year:
+            clauses.append("substr(bw.date, 1, 4) = ?")
+            params.append(str(query.year))
+        if query.event_name:
+            clauses.append("(lower(bw.event_name) LIKE ? OR ? LIKE '%' || lower(bw.event_name) || '%')")
+            params.append(f"%{query.event_name.lower()}%")
+            params.append(query.event_name.lower())
+        if query.team_terms:
+            for term in query.team_terms:
+                lowered_term = term.lower()
+                clauses.append("(lower(am.teams_csv) LIKE ? OR lower(bw.bowling_team) LIKE ? OR lower(bw.opposition_team) LIKE ?)")
+                params.extend([f"%{lowered_term}%", f"%{lowered_term}%", f"%{lowered_term}%"])
+
+    sql = f"""
+        SELECT bw.match_id, bw.player_id, bw.player_name, bw.bowling_team, bw.opposition_team,
+               bw.wickets, bw.runs_conceded, bw.balls_bowled, bw.match_type, bw.date,
+               bw.venue, bw.event_name, am.teams_csv
+        FROM bowling_performances bw
+        JOIN analytics_matches am ON am.match_id = bw.match_id
+        WHERE {' AND '.join(clauses)}
+        ORDER BY bw.wickets DESC, bw.runs_conceded ASC, bw.date DESC
+        LIMIT 1
+    """
+    row = connection.execute(sql, params).fetchone()
+    if row is None:
+        return None
+
+    display_name = get_preferred_player_display_name(connection, int(row["player_id"]), str(row["player_name"]))
+    answer = (
+        f"In {row['teams_csv']} on {row['date']}, {display_name} took "
+        f"{row['wickets']}/{row['runs_conceded']} from {row['balls_bowled']} balls "
+        f"for {row['bowling_team']} against {row['opposition_team']}."
+    )
+    return {"answer": answer, "sources": [{
+        "chunk_id": f"analytics:{row['match_id']}:player_bowling:{row['player_id']}",
+        "score": 1.0, "text": answer, "title": "Analytics player bowling result",
+        "player_name": row["player_name"], "display_name": display_name,
+        "teams": row["teams_csv"], "match_id": row["match_id"], "date": row["date"],
+        "match_type": row["match_type"] or "", "event_name": row["event_name"] or "",
+        "venue": row["venue"] or "", "document_type": "analytics_result",
+    }]}

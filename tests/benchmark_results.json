@@ -1,0 +1,1788 @@
+[
+  {
+    "id": "K001",
+    "difficulty": "easy",
+    "category": "cricket_knowledge",
+    "question": "What is the DLS method in cricket?",
+    "answer": "The Duckworth-Lewis-Stern method is used in limited-overs cricket to reset targets when rain or other interruptions reduce the number of overs. It estimates the batting side's remaining resources based on overs left and wickets lost, then adjusts the chase target to keep the contest fair.",
+    "expected_contains": [
+      "Duckworth",
+      "rain",
+      "target",
+      "resources"
+    ],
+    "checks": {
+      "Duckworth": true,
+      "rain": true,
+      "target": true,
+      "resources": true
+    },
+    "passed": true,
+    "elapsed_s": 1.6,
+    "notes": "Should explain Duckworth-Lewis-Stern method for rain-affected matches"
+  },
+  {
+    "id": "K002",
+    "difficulty": "easy",
+    "category": "cricket_knowledge",
+    "question": "What is a powerplay in ODI cricket?",
+    "answer": "In ODI cricket, a powerplay is the phase where fielding restrictions limit how many fielders can stay outside the 30-yard circle. The first 10 overs are the opening powerplay, when only two fielders are allowed outside the circle. In the middle overs, up to four fielders are allowed outside, and in the final overs up to five are allowed outside.",
+    "expected_contains": [
+      "first 10 overs",
+      "fielding restrictions"
+    ],
+    "checks": {
+      "first 10 overs": true,
+      "fielding restrictions": true
+    },
+    "passed": true,
+    "elapsed_s": 1.4,
+    "notes": "Should mention the first 10 overs and fielding circle restrictions"
+  },
+  {
+    "id": "K003",
+    "difficulty": "easy",
+    "category": "cricket_knowledge",
+    "question": "What is LBW in cricket?",
+    "answer": "A batter can be out lbw if the ball would have gone on to hit the stumps but is intercepted by the body, subject to the laws about pitching line, impact line, and whether the ball struck the bat first.",
+    "expected_contains": [
+      "lbw",
+      "stumps"
+    ],
+    "checks": {
+      "lbw": true,
+      "stumps": true
+    },
+    "passed": true,
+    "elapsed_s": 1.5,
+    "notes": "Should explain Leg Before Wicket — ball intercepted by body before hitting stumps"
+  },
+  {
+    "id": "K004",
+    "difficulty": "easy",
+    "category": "cricket_knowledge",
+    "question": "What is the difference between a no-ball and a wide?",
+    "answer": "A wide is called when the ball is too far from the batter to be reasonably played from the normal stance. A no-ball is called for an illegal delivery, such as overstepping the front line or certain fielding and bowling infringements. Both give the batting side one extra run, but a no-ball also gives the batter a free hit in many limited-overs situations.",
+    "expected_contains": [
+      "no-ball",
+      "wide"
+    ],
+    "checks": {
+      "no-ball": true,
+      "wide": true
+    },
+    "passed": true,
+    "elapsed_s": 1.6,
+    "notes": "Should distinguish between the two illegal deliveries"
+  },
+  {
+    "id": "K005",
+    "difficulty": "easy",
+    "category": "cricket_knowledge",
+    "question": "What is a free hit in cricket?",
+    "answer": "In limited-overs cricket, a front-foot no-ball is usually followed by a free hit. On that delivery, the batter cannot be dismissed by most normal methods such as bowled, caught, lbw, or stumped, though run out and a few other modes still apply.",
+    "expected_contains": [
+      "free hit",
+      "no-ball"
+    ],
+    "checks": {
+      "free hit": true,
+      "no-ball": true
+    },
+    "passed": true,
+    "elapsed_s": 1.3,
+    "notes": "Should explain that a free hit follows a no-ball and the batter cannot be dismissed except run out"
+  },
+  {
+    "id": "A001",
+    "difficulty": "easy",
+    "category": "aggregate_stats",
+    "question": "What is the highest individual score in ODI cricket?",
+    "answer": "The highest individual score in ODI is 264 by Rohit Sharma for India against Sri Lanka on 2014-11-13.",
+    "expected_contains": [
+      "264",
+      "Rohit Sharma"
+    ],
+    "checks": {
+      "264": true,
+      "Rohit Sharma": true
+    },
+    "passed": true,
+    "elapsed_s": 3.7,
+    "notes": "Rohit Sharma scored 264 vs Sri Lanka on 2014-11-13"
+  },
+  {
+    "id": "A002",
+    "difficulty": "easy",
+    "category": "aggregate_stats",
+    "question": "Who has the most wickets in ODI cricket?",
+    "answer": "The player with the most wickets in ODI is Lasith Malinga with 322 wickets.",
+    "expected_contains": [
+      "Malinga",
+      "322"
+    ],
+    "checks": {
+      "Malinga": true,
+      "322": true
+    },
+    "passed": true,
+    "elapsed_s": 5.2,
+    "notes": "SL Malinga: 322 ODI wickets in 208 matches"
+  },
+  {
+    "id": "A003",
+    "difficulty": "easy",
+    "category": "aggregate_stats",
+    "question": "Who has the most runs in ODI cricket?",
+    "answer": "The player with the most runs in ODI is Virat Kohli with 14675 runs.",
+    "expected_contains": [
+      "Kohli",
+      "14675"
+    ],
+    "checks": {
+      "Kohli": true,
+      "14675": true
+    },
+    "passed": true,
+    "elapsed_s": 4.5,
+    "notes": "V Kohli: 14675 ODI runs in 296 innings"
+  },
+  {
+    "id": "A004",
+    "difficulty": "easy",
+    "category": "aggregate_stats",
+    "question": "Who has the most runs in Test cricket?",
+    "answer": "The player with the most runs in Test is Joe Root with 13943 runs.",
+    "expected_contains": [
+      "Root",
+      "13943"
+    ],
+    "checks": {
+      "Root": true,
+      "13943": true
+    },
+    "passed": true,
+    "elapsed_s": 4.8,
+    "notes": "JE Root: 13943 Test runs in 298 innings"
+  },
+  {
+    "id": "A005",
+    "difficulty": "easy",
+    "category": "aggregate_stats",
+    "question": "What is the highest individual score in the dataset?",
+    "answer": "The highest individual score is 410 by SA Northeast for Glamorgan against Leicestershire on 2022-07-20.",
+    "expected_contains": [
+      "410",
+      "Northeast"
+    ],
+    "checks": {
+      "410": true,
+      "Northeast": true
+    },
+    "passed": true,
+    "elapsed_s": 8.0,
+    "notes": "SA Northeast scored 410 off 450 balls — domestic match (MDM format). Note: Brian Lara's 400* is the highest in international Test cricket but is not in this dataset."
+  },
+  {
+    "id": "A006",
+    "difficulty": "easy",
+    "category": "aggregate_stats",
+    "question": "What are the best bowling figures in an ODI?",
+    "answer": "The best bowling figures in ODI are 7/14 by Shahid Afridi for Pakistan against West Indies on 2013-07-14.",
+    "expected_contains": [
+      "Afridi",
+      "7"
+    ],
+    "checks": {
+      "Afridi": true,
+      "7": true
+    },
+    "passed": true,
+    "elapsed_s": 2.4,
+    "notes": "Shahid Afridi: 7/14 vs West Indies on 2013-07-14"
+  },
+  {
+    "id": "A007",
+    "difficulty": "easy",
+    "category": "aggregate_stats",
+    "question": "Who has scored the most runs at Wankhede Stadium?",
+    "answer": "The player with the most runs across all recorded matches at Wankhede Stadium is Rohit Sharma with 2950 runs in 99 innings.",
+    "expected_contains": [
+      "Rohit Sharma",
+      "2950"
+    ],
+    "checks": {
+      "Rohit Sharma": true,
+      "2950": true
+    },
+    "passed": true,
+    "elapsed_s": 8.3,
+    "notes": "RG Sharma: 2950 runs in 99 innings at Wankhede"
+  },
+  {
+    "id": "A008",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "What is Virat Kohli's batting average in ODIs?",
+    "answer": "Virat Kohli's batting average in ODI is 58.7 (14675 runs).",
+    "expected_contains": [
+      "58.7"
+    ],
+    "checks": {
+      "58.7": true
+    },
+    "passed": true,
+    "elapsed_s": 2.2,
+    "notes": "V Kohli ODI: 14675 runs, 250 dismissals, avg 58.7"
+  },
+  {
+    "id": "A009",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "What is Virat Kohli's batting average in Test cricket?",
+    "answer": "Virat Kohli's batting average in Test is 46.85 (9230 runs).",
+    "expected_contains": [
+      "46.85"
+    ],
+    "checks": {
+      "46.85": true
+    },
+    "passed": true,
+    "elapsed_s": 1.8,
+    "notes": "V Kohli Test: 9230 runs, 197 dismissals, avg 46.85"
+  },
+  {
+    "id": "A010",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "How many ODI centuries has Virat Kohli scored?",
+    "answer": "54",
+    "expected_contains": [
+      "54"
+    ],
+    "checks": {
+      "54": true
+    },
+    "passed": true,
+    "elapsed_s": 3.3,
+    "notes": "V Kohli: 54 ODI centuries"
+  },
+  {
+    "id": "A011",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "How many Test centuries has Virat Kohli scored?",
+    "answer": "30",
+    "expected_contains": [
+      "30"
+    ],
+    "checks": {
+      "30": true
+    },
+    "passed": true,
+    "elapsed_s": 5.4,
+    "notes": "V Kohli: 30 Test centuries"
+  },
+  {
+    "id": "A012",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "What is Joe Root's Test batting average?",
+    "answer": "Joe Root's batting average in Test is 50.89 (13943 runs).",
+    "expected_contains": [
+      "50.89"
+    ],
+    "checks": {
+      "50.89": true
+    },
+    "passed": true,
+    "elapsed_s": 5.8,
+    "notes": "JE Root Test: 13943 runs, 274 dismissals, avg 50.89"
+  },
+  {
+    "id": "A013",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "What is Rohit Sharma's highest score in ODIs?",
+    "answer": "Rohit Sharma's highest score in ODIs is 264.",
+    "expected_contains": [
+      "264"
+    ],
+    "checks": {
+      "264": true
+    },
+    "passed": true,
+    "elapsed_s": 4.3,
+    "notes": "RG Sharma: 264 vs Sri Lanka on 2014-11-13"
+  },
+  {
+    "id": "A014",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "What are the best bowling figures in a Test match?",
+    "answer": "The best bowling figures in Test are 10/126 by Ajaz Patel for New Zealand against India on 2021-12-03.",
+    "expected_contains": [
+      "Patel",
+      "10"
+    ],
+    "checks": {
+      "Patel": true,
+      "10": true
+    },
+    "passed": true,
+    "elapsed_s": 3.9,
+    "notes": "AY Patel: 10/126 vs India on 2021-12-03 — all 10 wickets in an innings"
+  },
+  {
+    "id": "A015",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "Who has the most wickets at Lord's Cricket Ground?",
+    "answer": "The bowler with the most wickets across all recorded matches at Lord is Toby Roland-Jones with 243 wickets in 74 matches.",
+    "expected_contains": [
+      "Roland-Jones",
+      "243"
+    ],
+    "checks": {
+      "Roland-Jones": true,
+      "243": true
+    },
+    "passed": true,
+    "elapsed_s": 5.9,
+    "notes": "TS Roland-Jones: 243 wickets at Lord's"
+  },
+  {
+    "id": "A016",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "Who has scored the most runs at Lord's Cricket Ground?",
+    "answer": "The player with the most runs across all recorded matches at Lord is Sam Robson with 4329 runs in 111 innings.",
+    "expected_contains": [
+      "Robson",
+      "4329"
+    ],
+    "checks": {
+      "Robson": true,
+      "4329": true
+    },
+    "passed": true,
+    "elapsed_s": 5.1,
+    "notes": "SD Robson: 4329 runs at Lord's in 111 innings"
+  },
+  {
+    "id": "A017",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "What is the head-to-head record between India and Australia in Test cricket?",
+    "answer": "India vs Australia head-to-head in Test: 51 matches played. India won 20, Australia won 17.",
+    "expected_contains": [
+      "51",
+      "20",
+      "17"
+    ],
+    "checks": {
+      "51": true,
+      "20": true,
+      "17": true
+    },
+    "passed": true,
+    "elapsed_s": 2.4,
+    "notes": "India vs Australia Test: 51 matches, India 20 wins, Australia 17 wins"
+  },
+  {
+    "id": "A018",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "What is the head-to-head record between England and Australia in Test cricket?",
+    "answer": "Australia vs England head-to-head in Test: 73 matches played. Australia won 36, England won 21.",
+    "expected_contains": [
+      "73",
+      "21",
+      "36"
+    ],
+    "checks": {
+      "73": true,
+      "21": true,
+      "36": true
+    },
+    "passed": true,
+    "elapsed_s": 2.1,
+    "notes": "England vs Australia Test (Ashes): 73 matches, England 21, Australia 36"
+  },
+  {
+    "id": "A019",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "Who scored the most ODI runs in 2023?",
+    "answer": "The player with the most runs in ODI 2023 is Shubman Gill with 1584 runs.",
+    "expected_contains": [
+      "Gill",
+      "1584"
+    ],
+    "checks": {
+      "Gill": true,
+      "1584": true
+    },
+    "passed": true,
+    "elapsed_s": 4.1,
+    "notes": "Shubman Gill: 1584 ODI runs in 2023"
+  },
+  {
+    "id": "A020",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "How many ODI runs has MS Dhoni scored?",
+    "answer": "MS Dhoni has scored 10274 ODI runs.",
+    "expected_contains": [
+      "10274"
+    ],
+    "checks": {
+      "10274": true
+    },
+    "passed": true,
+    "elapsed_s": 5.2,
+    "notes": "MS Dhoni ODI: 10274 runs in 279 innings"
+  },
+  {
+    "id": "A021",
+    "difficulty": "medium",
+    "category": "aggregate_stats",
+    "question": "What is Rohit Sharma's ODI batting record?",
+    "answer": "Rohit Sharma's ODI batting record includes:\n- Matches: 270\n- Innings: 270\n- Runs: 11357\n- Highest Score: 264\n- Average: 48.12\n- Centuries: 32\n- Fifties: 60",
+    "expected_contains": [
+      "11357",
+      "32"
+    ],
+    "checks": {
+      "11357": true,
+      "32": true
+    },
+    "passed": true,
+    "elapsed_s": 8.7,
+    "notes": "RG Sharma ODI: 11357 runs, 270 innings, 32 tons, 60 fifties, HS 264"
+  },
+  {
+    "id": "A022",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "Who has the best batting average in ODIs among players with at least 30 innings?",
+    "answer": "The best batting average in ODI is 59.76 by Daryl Mitchell (2689 runs in 53 innings, 45 dismissals).",
+    "expected_contains": [
+      "Mitchell",
+      "59.76"
+    ],
+    "checks": {
+      "Mitchell": true,
+      "59.76": true
+    },
+    "passed": true,
+    "elapsed_s": 6.9,
+    "notes": "DJ Mitchell: avg 59.76 (2689 runs, 30+ innings) — Kohli is second at 58.7"
+  },
+  {
+    "id": "A023",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What are the top 5 ODI wicket takers?",
+    "answer": "Top 5 wicket takers in ODI:\n1. Lasith Malinga — 322 wickets (208 matches)\n2. Shakib Al Hasan — 259 wickets (205 matches)\n3. Brett Lee — 257 wickets (151 matches)\n4. James Anderson — 250 wickets (177 matches)\n5. Shahid Afridi — 242 wickets (200 matches)",
+    "expected_contains": [
+      "Malinga",
+      "322",
+      "Shakib"
+    ],
+    "checks": {
+      "Malinga": true,
+      "322": true,
+      "Shakib": true
+    },
+    "passed": true,
+    "elapsed_s": 1.6,
+    "notes": "Top 5: Malinga 322, Shakib 259, Lee 257, Anderson 250, Afridi 242"
+  },
+  {
+    "id": "A024",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "How many centuries has Virat Kohli scored across all formats including domestic cricket?",
+    "answer": "92 centuries (100s)",
+    "expected_contains": [
+      "92"
+    ],
+    "checks": {
+      "92": true
+    },
+    "passed": true,
+    "elapsed_s": 5.9,
+    "notes": "V Kohli: 92 total centuries in dataset (54 ODI + 30 Test + 8 T20/domestic)"
+  },
+  {
+    "id": "H001",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is Rohit Sharma's highest score in Test cricket?",
+    "answer": "Rohit Sharma's highest score in Test cricket is 212.",
+    "expected_contains": [
+      "212"
+    ],
+    "checks": {
+      "212": true
+    },
+    "passed": true,
+    "elapsed_s": 6.9,
+    "notes": "RG Sharma Test HS: 212 vs South Africa on 2019-10-19"
+  },
+  {
+    "id": "H002",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "Who has the most ODI wickets among top 5 wicket takers?",
+    "answer": "Top 5 wicket takers in ODI:\n1. Lasith Malinga — 322 wickets (208 matches)\n2. Shakib Al Hasan — 259 wickets (205 matches)\n3. Brett Lee — 257 wickets (151 matches)\n4. James Anderson — 250 wickets (177 matches)\n5. Shahid Afridi — 242 wickets (200 matches)",
+    "expected_contains": [
+      "Malinga",
+      "322"
+    ],
+    "checks": {
+      "Malinga": true,
+      "322": true
+    },
+    "passed": true,
+    "elapsed_s": 5.3,
+    "notes": "Top 5 ODI wicket takers from dataset"
+  },
+  {
+    "id": "H003",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is Virat Kohli's career stats in Test cricket?",
+    "answer": "Matches: 121\nInnings: 210\nRuns: 9230\nHighest Score: 254\nAverage: 46.85\nCenturies: 30\nFifties: 31\nI don't have that breakdown in the current dataset.",
+    "expected_contains": [
+      "9230",
+      "30",
+      "254"
+    ],
+    "checks": {
+      "9230": true,
+      "30": true,
+      "254": true
+    },
+    "passed": true,
+    "elapsed_s": 7.0,
+    "notes": "V Kohli Test: 121 matches, 210 inn, 9230 runs, HS 254, avg 46.85, 30 tons, 31 fifties"
+  },
+  {
+    "id": "H004",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is Rohit Sharma's career stats in ODI cricket?",
+    "answer": "Rohit Sharma's ODI career statistics include:\n- Matches: 270\n- Innings: 270\n- Runs: 11357\n- Highest Score: 264\n- Batting Average: 48.12\n- Centuries: 32\n- Fifties: 60\n- Fourths: 1069\n- Sixes: 351\n- Dismissals: 236\n- Not-Outs: 34",
+    "expected_contains": [
+      "11357",
+      "264",
+      "32"
+    ],
+    "checks": {
+      "11357": true,
+      "264": true,
+      "32": true
+    },
+    "passed": true,
+    "elapsed_s": 11.4,
+    "notes": "RG Sharma ODI: 270 matches, 11357 runs, HS 264, 32 tons, 60 fifties"
+  },
+  {
+    "id": "H005",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is the best bowling economy rate in ODIs?",
+    "answer": "The best bowling economy in ODI is 2.93 by P Siaka (14 wickets in 8 matches).",
+    "expected_contains": [
+      "2.93"
+    ],
+    "checks": {
+      "2.93": true
+    },
+    "passed": true,
+    "elapsed_s": 4.2,
+    "notes": "P Siaka: economy 2.93 in ODIs (min 300 balls)"
+  },
+  {
+    "id": "H006",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What are the best bowling figures in a Test innings?",
+    "answer": "The best bowling figures in Test are 10/126 by Ajaz Patel for New Zealand against India on 2021-12-03.",
+    "expected_contains": [
+      "Patel",
+      "10",
+      "126"
+    ],
+    "checks": {
+      "Patel": true,
+      "10": true,
+      "126": true
+    },
+    "passed": true,
+    "elapsed_s": 1.4,
+    "notes": "AY Patel: 10/126 vs India on 2021-12-03 — took all 10 wickets in an innings"
+  },
+  {
+    "id": "H007",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "How many ODI centuries has Rohit Sharma scored?",
+    "answer": "32",
+    "expected_contains": [
+      "32"
+    ],
+    "checks": {
+      "32": true
+    },
+    "passed": true,
+    "elapsed_s": 3.7,
+    "notes": "RG Sharma: 32 ODI centuries"
+  },
+  {
+    "id": "H008",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is the head-to-head ODI record between India and Australia?",
+    "answer": "India vs Australia head-to-head in ODI: 109 matches played. India won 39, Australia won 63, 7 no result/tied.",
+    "expected_contains": [
+      "109",
+      "39",
+      "63"
+    ],
+    "checks": {
+      "109": true,
+      "39": true,
+      "63": true
+    },
+    "passed": true,
+    "elapsed_s": 6.2,
+    "notes": "India vs Australia ODI: 109 matches, India 39, Australia 63, 7 no result/tied"
+  },
+  {
+    "id": "H009",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is Joe Root's Test batting average?",
+    "answer": "Joe Root's batting average in Test is 50.89 (13943 runs).",
+    "expected_contains": [
+      "50.89"
+    ],
+    "checks": {
+      "50.89": true
+    },
+    "passed": true,
+    "elapsed_s": 3.7,
+    "notes": "JE Root Test: 13943 runs, 274 dismissals, avg 50.89"
+  },
+  {
+    "id": "H010",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "How many Test centuries has Joe Root scored?",
+    "answer": "41 centuries",
+    "expected_contains": [
+      "41"
+    ],
+    "checks": {
+      "41": true
+    },
+    "passed": true,
+    "elapsed_s": 3.0,
+    "notes": "JE Root Test: 41 centuries in 298 innings"
+  },
+  {
+    "id": "X001",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is Steve Smith's Test batting average?",
+    "answer": "Steven Smith's batting average in Test is 56.06 (10763 runs).",
+    "expected_contains": [
+      "56.06"
+    ],
+    "checks": {
+      "56.06": true
+    },
+    "passed": true,
+    "elapsed_s": 4.0,
+    "notes": "SPD Smith Test: 10763 runs, 220 innings, avg 56.06"
+  },
+  {
+    "id": "X002",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "How many Test centuries has Steve Smith scored?",
+    "answer": "37",
+    "expected_contains": [
+      "37"
+    ],
+    "checks": {
+      "37": true
+    },
+    "passed": true,
+    "elapsed_s": 3.1,
+    "notes": "SPD Smith Test: 37 centuries in 220 innings"
+  },
+  {
+    "id": "X003",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is Kane Williamson's Test batting average?",
+    "answer": "Kane Williamson's batting average in Test is 54.69 (9461 runs).",
+    "expected_contains": [
+      "54.69"
+    ],
+    "checks": {
+      "54.69": true
+    },
+    "passed": true,
+    "elapsed_s": 4.1,
+    "notes": "KS Williamson Test: 9461 runs, 192 innings, avg 54.69"
+  },
+  {
+    "id": "X004",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "How many Test centuries has Kane Williamson scored?",
+    "answer": "33",
+    "expected_contains": [
+      "33"
+    ],
+    "checks": {
+      "33": true
+    },
+    "passed": true,
+    "elapsed_s": 3.2,
+    "notes": "KS Williamson Test: 33 centuries in 192 innings"
+  },
+  {
+    "id": "X005",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is AB de Villiers' ODI batting average?",
+    "answer": "AB de Villiers's batting average in ODI is 53.91 (9435 runs).",
+    "expected_contains": [
+      "53.91"
+    ],
+    "checks": {
+      "53.91": true
+    },
+    "passed": true,
+    "elapsed_s": 4.3,
+    "notes": "AB de Villiers ODI: 9435 runs, 213 innings, avg 53.91"
+  },
+  {
+    "id": "X006",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "How many ODI centuries has AB de Villiers scored?",
+    "answer": "25",
+    "expected_contains": [
+      "25"
+    ],
+    "checks": {
+      "25": true
+    },
+    "passed": true,
+    "elapsed_s": 3.9,
+    "notes": "AB de Villiers ODI: 25 centuries in 213 innings"
+  },
+  {
+    "id": "X007",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is Babar Azam's ODI batting average?",
+    "answer": "Babar Azam's batting average in ODI is 53.94 (6203 runs).",
+    "expected_contains": [
+      "53.94"
+    ],
+    "checks": {
+      "53.94": true
+    },
+    "passed": true,
+    "elapsed_s": 4.6,
+    "notes": "Babar Azam ODI: 6203 runs, 131 innings, avg 53.94"
+  },
+  {
+    "id": "X008",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "How many Test wickets has James Anderson taken?",
+    "answer": "James Anderson has taken 682 wickets in Test.",
+    "expected_contains": [
+      "682"
+    ],
+    "checks": {
+      "682": true
+    },
+    "passed": true,
+    "elapsed_s": 1.8,
+    "notes": "JM Anderson Test: 682 wickets in 181 matches, eco 2.9"
+  },
+  {
+    "id": "X009",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "How many Test wickets has Stuart Broad taken?",
+    "answer": "Stuart Broad has taken 604 wickets in Test.",
+    "expected_contains": [
+      "604"
+    ],
+    "checks": {
+      "604": true
+    },
+    "passed": true,
+    "elapsed_s": 1.7,
+    "notes": "SCJ Broad Test: 604 wickets in 166 matches, eco 3.11"
+  },
+  {
+    "id": "X010",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is the head-to-head ODI record between India and Pakistan?",
+    "answer": "India vs Pakistan head-to-head in ODI: 50 matches played. India won 31, Pakistan won 18, 1 no result/tied.",
+    "expected_contains": [
+      "50",
+      "31",
+      "18"
+    ],
+    "checks": {
+      "50": true,
+      "31": true,
+      "18": true
+    },
+    "passed": true,
+    "elapsed_s": 3.8,
+    "notes": "India vs Pakistan ODI: 50 matches, India 31, Pakistan 18"
+  },
+  {
+    "id": "X011",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is the head-to-head ODI record between India and England?",
+    "answer": "India vs England head-to-head in ODI: 89 matches played. India won 51, England won 35, 1 no result/tied.",
+    "expected_contains": [
+      "89",
+      "51",
+      "35"
+    ],
+    "checks": {
+      "89": true,
+      "51": true,
+      "35": true
+    },
+    "passed": true,
+    "elapsed_s": 3.8,
+    "notes": "India vs England ODI: 89 matches, India 51, England 35"
+  },
+  {
+    "id": "X012",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is the head-to-head ODI record between Australia and South Africa?",
+    "answer": "Australia vs South Africa head-to-head in ODI: 66 matches played. Australia won 31, South Africa won 34, 1 no result/tied.",
+    "expected_contains": [
+      "66",
+      "31",
+      "34"
+    ],
+    "checks": {
+      "66": true,
+      "31": true,
+      "34": true
+    },
+    "passed": true,
+    "elapsed_s": 3.8,
+    "notes": "Australia vs South Africa ODI: 66 matches, Australia 31, South Africa 34"
+  },
+  {
+    "id": "X013",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "Who has hit the most sixes in ODI cricket?",
+    "answer": "The player with the most sixes in ODI is Rohit Sharma with 351 sixes.",
+    "expected_contains": [
+      "Rohit Sharma",
+      "351"
+    ],
+    "checks": {
+      "Rohit Sharma": true,
+      "351": true
+    },
+    "passed": true,
+    "elapsed_s": 3.9,
+    "notes": "RG Sharma: 351 ODI sixes — most in dataset"
+  },
+  {
+    "id": "X014",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "Who has hit the most fours in Test cricket?",
+    "answer": "The player with the most fours in Test is Joe Root with 1500 fours.",
+    "expected_contains": [
+      "Root",
+      "1500"
+    ],
+    "checks": {
+      "Root": true,
+      "1500": true
+    },
+    "passed": true,
+    "elapsed_s": 3.6,
+    "notes": "JE Root Test: 1500 fours — most in dataset"
+  },
+  {
+    "id": "X015",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "Who scored the most ODI runs in 2019?",
+    "answer": "The player with the most runs in ODI 2019 is Rohit Sharma with 1489 runs.",
+    "expected_contains": [
+      "Rohit Sharma",
+      "1489"
+    ],
+    "checks": {
+      "Rohit Sharma": true,
+      "1489": true
+    },
+    "passed": true,
+    "elapsed_s": 4.2,
+    "notes": "RG Sharma: 1489 ODI runs in 2019"
+  },
+  {
+    "id": "X016",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is Virat Kohli's best Test year by runs?",
+    "answer": "Virat Kohli's best year by runs in Test was 2018 with 1322 runs.",
+    "expected_contains": [
+      "2018",
+      "1322"
+    ],
+    "checks": {
+      "2018": true,
+      "1322": true
+    },
+    "passed": true,
+    "elapsed_s": 1.9,
+    "notes": "V Kohli best Test year: 2018 — 1322 runs in 24 innings"
+  },
+  {
+    "id": "X017",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is Virat Kohli's Test batting average in 2016?",
+    "answer": "Virat Kohli's batting average in Test 2016 was 75.94 (1215 runs, 16 dismissals).",
+    "expected_contains": [
+      "75.94"
+    ],
+    "checks": {
+      "75.94": true
+    },
+    "passed": true,
+    "elapsed_s": 2.2,
+    "notes": "V Kohli Test 2016: avg 75.94, 1215 runs, 18 innings"
+  },
+  {
+    "id": "X018",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "Who took the most Test wickets in a single calendar year?",
+    "answer": "The most wickets taken in a single calendar year in Test is 84 by Muttiah Muralitharan in 2006.",
+    "expected_contains": [
+      "Muralitharan",
+      "84",
+      "2006"
+    ],
+    "checks": {
+      "Muralitharan": true,
+      "84": true,
+      "2006": true
+    },
+    "passed": true,
+    "elapsed_s": 3.8,
+    "notes": "M Muralitharan: 84 Test wickets in 2006 — most in a calendar year in dataset"
+  },
+  {
+    "id": "X019",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "Who took the most ODI wickets in a single calendar year?",
+    "answer": "The most wickets taken in a single calendar year in ODI is 62 by Saeed Ajmal in 2013.",
+    "expected_contains": [
+      "Ajmal",
+      "62",
+      "2013"
+    ],
+    "checks": {
+      "Ajmal": true,
+      "62": true,
+      "2013": true
+    },
+    "passed": true,
+    "elapsed_s": 3.9,
+    "notes": "Saeed Ajmal: 62 ODI wickets in 2013 — most in a calendar year in dataset"
+  },
+  {
+    "id": "X020",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is Sachin Tendulkar's ODI batting average?",
+    "answer": "Sachin Tendulkar's batting average in ODI is 47.65 (6433 runs).",
+    "expected_contains": [
+      "47.65"
+    ],
+    "checks": {
+      "47.65": true
+    },
+    "passed": true,
+    "elapsed_s": 2.0,
+    "notes": "SR Tendulkar ODI in dataset: avg 47.65, 6433 runs, 144 innings — dataset is partial"
+  },
+  {
+    "id": "X021",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "How many Test wickets has Shakib Al Hasan taken?",
+    "answer": "Shakib Al Hasan has taken 226 wickets in Test.",
+    "expected_contains": [
+      "226"
+    ],
+    "checks": {
+      "226": true
+    },
+    "passed": true,
+    "elapsed_s": 2.0,
+    "notes": "Shakib Al Hasan Test: 226 wickets in 67 matches, eco 3.1"
+  },
+  {
+    "id": "X022",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is the second highest individual score in ODI cricket?",
+    "answer": "The second highest individual score in ODI is 237 by Martin Guptill for New Zealand against West Indies on 2015-03-21.",
+    "expected_contains": [
+      "237",
+      "Guptill"
+    ],
+    "checks": {
+      "237": true,
+      "Guptill": true
+    },
+    "passed": true,
+    "elapsed_s": 2.5,
+    "notes": "MJ Guptill: 237 off 166 balls vs West Indies on 2015-03-21 in 2015 WC"
+  },
+  {
+    "id": "X023",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is the third highest individual score in ODI cricket?",
+    "answer": "The third highest individual score in ODI is 219 by Virender Sehwag for India against West Indies on 2011-12-08.",
+    "expected_contains": [
+      "219",
+      "Sehwag"
+    ],
+    "checks": {
+      "219": true,
+      "Sehwag": true
+    },
+    "passed": true,
+    "elapsed_s": 2.1,
+    "notes": "V Sehwag: 219 vs West Indies on 2011-12-08"
+  },
+  {
+    "id": "X032",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is Virat Kohli's ODI batting average?",
+    "answer": "Virat Kohli's batting average in ODI is 58.7 (14675 runs).",
+    "expected_contains": [
+      "58.7"
+    ],
+    "checks": {
+      "58.7": true
+    },
+    "passed": true,
+    "elapsed_s": 2.3,
+    "notes": "V Kohli ODI: 14675 runs, 250 dismissals, avg 58.7"
+  },
+  {
+    "id": "X033",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "How many ODI Player of the Match awards has Virat Kohli won?",
+    "answer": "Virat Kohli has won 45 Player of the Match awards in ODI.",
+    "expected_contains": [
+      "45"
+    ],
+    "checks": {
+      "45": true
+    },
+    "passed": true,
+    "elapsed_s": 2.9,
+    "notes": "V Kohli: 45 ODI POTM awards in dataset — most among individual players"
+  },
+  {
+    "id": "X034",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is Rohit Sharma's ODI batting average?",
+    "answer": "Rohit Sharma's batting average in ODI is 48.12 (11357 runs).",
+    "expected_contains": [
+      "48.12"
+    ],
+    "checks": {
+      "48.12": true
+    },
+    "passed": true,
+    "elapsed_s": 2.3,
+    "notes": "RG Sharma ODI: 11357 runs, 236 dismissals, avg 48.12"
+  },
+  {
+    "id": "X037",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is the head-to-head Test record between India and Australia?",
+    "answer": "India vs Australia head-to-head in Test: 51 matches played. India won 20, Australia won 17.",
+    "expected_contains": [
+      "51",
+      "20",
+      "17"
+    ],
+    "checks": {
+      "51": true,
+      "20": true,
+      "17": true
+    },
+    "passed": true,
+    "elapsed_s": 3.8,
+    "notes": "India vs Australia Test: 51 matches, India 20, Australia 17"
+  },
+  {
+    "id": "X038",
+    "difficulty": "hard",
+    "category": "aggregate_stats",
+    "question": "What is the head-to-head Test record between England and Australia (Ashes)?",
+    "answer": "Australia vs England head-to-head in Test: 73 matches played. Australia won 36, England won 21.",
+    "expected_contains": [
+      "73",
+      "21",
+      "36"
+    ],
+    "checks": {
+      "73": true,
+      "21": true,
+      "36": true
+    },
+    "passed": true,
+    "elapsed_s": 4.0,
+    "notes": "England vs Australia Test: 73 matches, England 21, Australia 36"
+  },
+  {
+    "id": "P001",
+    "difficulty": "easy",
+    "category": "player_performance",
+    "question": "How did MS Dhoni perform in the 2011 World Cup final?",
+    "answer": "In India vs Sri Lanka on 2011-04-02, MS Dhoni scored 91 runs off 80 balls with 8 fours and 2 sixes for India against Sri Lanka.",
+    "expected_contains": [
+      "91",
+      "Dhoni",
+      "India",
+      "Sri Lanka"
+    ],
+    "checks": {
+      "91": true,
+      "Dhoni": true,
+      "India": true,
+      "Sri Lanka": true
+    },
+    "passed": true,
+    "elapsed_s": 5.6,
+    "notes": "MS Dhoni: 91 off 80 balls, 8 fours, 2 sixes — 2011-04-02"
+  },
+  {
+    "id": "P002",
+    "difficulty": "easy",
+    "category": "player_performance",
+    "question": "How did Virat Kohli perform in the 2011 World Cup final?",
+    "answer": "In India vs Sri Lanka on 2011-04-02, Virat Kohli scored 35 runs off 52 balls with 4 fours and 0 sixes for India against Sri Lanka. He also bowled 6 balls, taking 0 wickets for 6 runs.",
+    "expected_contains": [
+      "35",
+      "Kohli",
+      "India",
+      "Sri Lanka"
+    ],
+    "checks": {
+      "35": true,
+      "Kohli": true,
+      "India": true,
+      "Sri Lanka": true
+    },
+    "passed": true,
+    "elapsed_s": 5.2,
+    "notes": "V Kohli: 35 off 52 balls, 4 fours, 0 sixes — 2011-04-02"
+  },
+  {
+    "id": "P003",
+    "difficulty": "easy",
+    "category": "player_performance",
+    "question": "How did Mahela Jayawardene perform in the 2011 World Cup final?",
+    "answer": "In India vs Sri Lanka on 2011-04-02, Mahela Jayawardene scored 103 runs off 90 balls with 13 fours and 0 sixes for Sri Lanka against India.",
+    "expected_contains": [
+      "103",
+      "Jayawardene",
+      "Sri Lanka"
+    ],
+    "checks": {
+      "103": true,
+      "Jayawardene": true,
+      "Sri Lanka": true
+    },
+    "passed": true,
+    "elapsed_s": 5.9,
+    "notes": "DPMD Jayawardene: 103 off 90 balls, 13 fours, 0 sixes — 2011-04-02"
+  },
+  {
+    "id": "P004",
+    "difficulty": "medium",
+    "category": "player_performance",
+    "question": "How did Rohit Sharma perform against Sri Lanka in the ODI on 2014-11-13?",
+    "answer": "In India vs Sri Lanka on 2014-11-13, Rohit Sharma scored 264 runs off 176 balls with 33 fours and 9 sixes for India against Sri Lanka.",
+    "expected_contains": [
+      "264",
+      "Rohit Sharma"
+    ],
+    "checks": {
+      "264": true,
+      "Rohit Sharma": true
+    },
+    "passed": true,
+    "elapsed_s": 5.2,
+    "notes": "RG Sharma: 264 vs Sri Lanka on 2014-11-13 — world record ODI score"
+  },
+  {
+    "id": "P005",
+    "difficulty": "medium",
+    "category": "player_performance",
+    "question": "How did Pakistan perform in the 2017 ICC Champions Trophy final against India?",
+    "answer": "India vs Pakistan — Pakistan won by 180 runs (ICC Champions Trophy, 2017-06-18).",
+    "expected_contains": [
+      "Pakistan",
+      "180 runs"
+    ],
+    "checks": {
+      "Pakistan": true,
+      "180 runs": true
+    },
+    "passed": true,
+    "elapsed_s": 3.2,
+    "notes": "Pakistan won by 180 runs vs India on 2017-06-18 in ICC Champions Trophy"
+  },
+  {
+    "id": "X024",
+    "difficulty": "hard",
+    "category": "player_performance",
+    "question": "How did Martin Guptill perform against West Indies in the 2015 World Cup?",
+    "answer": "In New Zealand vs West Indies on 2015-03-21, Martin Guptill scored 237 runs off 166 balls with 24 fours and 11 sixes for New Zealand against West Indies.",
+    "expected_contains": [
+      "237",
+      "Guptill",
+      "166"
+    ],
+    "checks": {
+      "237": true,
+      "Guptill": true,
+      "166": true
+    },
+    "passed": true,
+    "elapsed_s": 6.7,
+    "notes": "MJ Guptill: 237 off 166 balls, 24 fours, 11 sixes — 2015-03-21"
+  },
+  {
+    "id": "X025",
+    "difficulty": "hard",
+    "category": "player_performance",
+    "question": "How did Chris Gayle perform against Zimbabwe in the 2015 World Cup?",
+    "answer": "In West Indies vs Zimbabwe on 2015-02-24, Chris Gayle scored 215 runs off 151 balls with 10 fours and 16 sixes for West Indies against Zimbabwe. He also bowled 38 balls, taking 2 wickets for 37 runs.",
+    "expected_contains": [
+      "215",
+      "Gayle",
+      "16"
+    ],
+    "checks": {
+      "215": true,
+      "Gayle": true,
+      "16": true
+    },
+    "passed": true,
+    "elapsed_s": 9.4,
+    "notes": "CH Gayle: 215 off 151 balls, 10 fours, 16 sixes vs Zimbabwe 2015-02-24"
+  },
+  {
+    "id": "X026",
+    "difficulty": "hard",
+    "category": "player_performance",
+    "question": "How did Stuart Broad bowl against Australia at Trent Bridge in 2015?",
+    "answer": "In England vs Australia on 2015-08-06, Stuart Broad took 8/26 from 57 balls for England against Australia.",
+    "expected_contains": [
+      "Broad",
+      "8",
+      "26"
+    ],
+    "checks": {
+      "Broad": true,
+      "8": true,
+      "26": true
+    },
+    "passed": true,
+    "elapsed_s": 7.1,
+    "notes": "SCJ Broad: 8/26 vs Australia on 2015-08-06 — England won by 78 runs"
+  },
+  {
+    "id": "D001",
+    "difficulty": "easy",
+    "category": "player_dismissal",
+    "question": "Who dismissed Virat Kohli in the 2011 World Cup final?",
+    "answer": "Virat Kohli was caught and bowled by Tillakaratne Dilshan in over 21 (India vs Sri Lanka, 2011-04-02).",
+    "expected_contains": [
+      "Dilshan",
+      "caught and bowled"
+    ],
+    "checks": {
+      "Dilshan": true,
+      "caught and bowled": true
+    },
+    "passed": true,
+    "elapsed_s": 5.6,
+    "notes": "V Kohli: caught and bowled by TM Dilshan in over 21 — match_id 433606"
+  },
+  {
+    "id": "D002",
+    "difficulty": "easy",
+    "category": "player_dismissal",
+    "question": "Who dismissed Sachin Tendulkar in the 2011 World Cup final?",
+    "answer": "Sachin Tendulkar was caught off the bowling of Lasith Malinga in over 6 (India vs Sri Lanka, 2011-04-02).",
+    "expected_contains": [
+      "Malinga",
+      "caught"
+    ],
+    "checks": {
+      "Malinga": true,
+      "caught": true
+    },
+    "passed": true,
+    "elapsed_s": 4.3,
+    "notes": "SR Tendulkar: caught off SL Malinga in over 6 — match_id 433606"
+  },
+  {
+    "id": "D003",
+    "difficulty": "medium",
+    "category": "player_dismissal",
+    "question": "How was Virat Kohli dismissed in the 2011 World Cup final?",
+    "answer": "Virat Kohli was caught and bowled by Tillakaratne Dilshan in over 21 (India vs Sri Lanka, 2011-04-02).",
+    "expected_contains": [
+      "caught and bowled",
+      "Dilshan",
+      "21"
+    ],
+    "checks": {
+      "caught and bowled": true,
+      "Dilshan": true,
+      "21": true
+    },
+    "passed": true,
+    "elapsed_s": 5.2,
+    "notes": "V Kohli: caught and bowled by TM Dilshan in over 21"
+  },
+  {
+    "id": "X030",
+    "difficulty": "hard",
+    "category": "player_dismissal",
+    "question": "Who has dismissed Virat Kohli the most times?",
+    "answer": "TG Southee has dismissed Virat Kohli the most times — 12 times.",
+    "expected_contains": [
+      "Southee",
+      "12"
+    ],
+    "checks": {
+      "Southee": true,
+      "12": true
+    },
+    "passed": true,
+    "elapsed_s": 1.9,
+    "notes": "TG Southee: dismissed V Kohli 12 times — most in dataset"
+  },
+  {
+    "id": "X031",
+    "difficulty": "hard",
+    "category": "player_dismissal",
+    "question": "What is Virat Kohli's most common mode of dismissal?",
+    "answer": "Virat Kohli's most common mode of dismissal is caught (516 times). Top 3: caught (516), bowled (102), lbw (77).",
+    "expected_contains": [
+      "caught",
+      "516"
+    ],
+    "checks": {
+      "caught": true,
+      "516": true
+    },
+    "passed": true,
+    "elapsed_s": 2.1,
+    "notes": "V Kohli: caught 516, bowled 102, lbw 77, run out 31"
+  },
+  {
+    "id": "M001",
+    "difficulty": "easy",
+    "category": "match_narrative",
+    "question": "Who won the 2011 Cricket World Cup final?",
+    "answer": "India vs Sri Lanka — India won by 6 wickets (ICC Cricket World Cup, 2011-04-02).",
+    "expected_contains": [
+      "India",
+      "6 wickets"
+    ],
+    "checks": {
+      "India": true,
+      "6 wickets": true
+    },
+    "passed": true,
+    "elapsed_s": 2.6,
+    "notes": "India won by 6 wickets vs Sri Lanka on 2011-04-02"
+  },
+  {
+    "id": "M002",
+    "difficulty": "easy",
+    "category": "match_narrative",
+    "question": "Who won the 2019 Cricket World Cup final?",
+    "answer": "England vs New Zealand — tie (World Cup, 2019-07-14).",
+    "expected_contains": [
+      "England",
+      "New Zealand"
+    ],
+    "checks": {
+      "England": true,
+      "New Zealand": true
+    },
+    "passed": true,
+    "elapsed_s": 2.2,
+    "notes": "England vs New Zealand 2019-07-14 — outcome recorded as 'tie' in dataset; England won on boundary countback"
+  },
+  {
+    "id": "M003",
+    "difficulty": "medium",
+    "category": "match_narrative",
+    "question": "What was the result of the 2017 ICC Champions Trophy final between India and Pakistan?",
+    "answer": "India vs Pakistan — Pakistan won by 180 runs (ICC Champions Trophy, 2017-06-18).",
+    "expected_contains": [
+      "Pakistan",
+      "180 runs"
+    ],
+    "checks": {
+      "Pakistan": true,
+      "180 runs": true
+    },
+    "passed": true,
+    "elapsed_s": 4.1,
+    "notes": "Pakistan won by 180 runs vs India on 2017-06-18"
+  },
+  {
+    "id": "X027",
+    "difficulty": "hard",
+    "category": "match_narrative",
+    "question": "Who won the 2015 Cricket World Cup final?",
+    "answer": "Australia vs New Zealand — Australia won by 7 wickets (ICC Cricket World Cup, 2015-03-29).",
+    "expected_contains": [
+      "Australia",
+      "7 wickets",
+      "New Zealand"
+    ],
+    "checks": {
+      "Australia": true,
+      "7 wickets": true,
+      "New Zealand": true
+    },
+    "passed": true,
+    "elapsed_s": 2.1,
+    "notes": "Australia won by 7 wickets vs New Zealand on 2015-03-29"
+  },
+  {
+    "id": "X028",
+    "difficulty": "hard",
+    "category": "match_narrative",
+    "question": "Who won the 2023 Cricket World Cup final?",
+    "answer": "India vs Australia — Australia won by 6 wickets (ICC Cricket World Cup, 2023-11-19).",
+    "expected_contains": [
+      "Australia",
+      "6 wickets",
+      "India"
+    ],
+    "checks": {
+      "Australia": true,
+      "6 wickets": true,
+      "India": true
+    },
+    "passed": true,
+    "elapsed_s": 2.1,
+    "notes": "Australia won by 6 wickets vs India on 2023-11-19 — match_id 1384439"
+  },
+  {
+    "id": "X029",
+    "difficulty": "hard",
+    "category": "match_narrative",
+    "question": "What was the result of the 2017 ICC Champions Trophy final?",
+    "answer": "India vs Pakistan — Pakistan won by 180 runs (ICC Champions Trophy, 2017-06-18).",
+    "expected_contains": [
+      "Pakistan",
+      "180 runs"
+    ],
+    "checks": {
+      "Pakistan": true,
+      "180 runs": true
+    },
+    "passed": true,
+    "elapsed_s": 2.3,
+    "notes": "Pakistan won by 180 runs vs India on 2017-06-18 in ICC Champions Trophy"
+  },
+  {
+    "id": "C001",
+    "difficulty": "medium",
+    "category": "conversational_followup",
+    "question": "what's kohli's batting average? [follow-up] what's the total centuries he hit?",
+    "answer": "92",
+    "expected_contains": [
+      "92"
+    ],
+    "checks": {
+      "92": true
+    },
+    "passed": true,
+    "elapsed_s": 6.0,
+    "notes": "Tests context carry-over — second question should use Kohli from first answer"
+  },
+  {
+    "id": "C002",
+    "difficulty": "medium",
+    "category": "conversational_followup",
+    "question": "How did Kohli do in the 2011 World Cup final? [follow-up] who took his wicket?",
+    "answer": "Virat Kohli was caught and bowled by Tillakaratne Dilshan in over 21 (India vs Sri Lanka, 2011-04-02).",
+    "expected_contains": [
+      "Dilshan",
+      "caught and bowled"
+    ],
+    "checks": {
+      "Dilshan": true,
+      "caught and bowled": true
+    },
+    "passed": true,
+    "elapsed_s": 9.6,
+    "notes": "Tests match context pinning — dismissal query should use match_id from first answer"
+  },
+  {
+    "id": "C003",
+    "difficulty": "medium",
+    "category": "conversational_followup",
+    "question": "How did Dhoni do in the 2011 WC final? [follow-up] how was he out?",
+    "answer": "MS Dhoni was not out in India vs Sri Lanka on 2011-04-02.",
+    "expected_contains": [
+      "not out"
+    ],
+    "checks": {
+      "not out": true
+    },
+    "passed": true,
+    "elapsed_s": 6.2,
+    "notes": "Dhoni was not dismissed in the 2011 WC final — no dismissal record exists for him in that match"
+  },
+  {
+    "id": "C004",
+    "difficulty": "hard",
+    "category": "conversational_followup",
+    "question": "what's kohli's ODI average? [follow-up] how many fifties did he score?",
+    "answer": "75",
+    "expected_contains": [
+      "75"
+    ],
+    "checks": {
+      "75": true
+    },
+    "passed": true,
+    "elapsed_s": 5.5,
+    "notes": "V Kohli ODI: 75 fifties"
+  },
+  {
+    "id": "X035",
+    "difficulty": "hard",
+    "category": "conversational_followup",
+    "question": "What is Steve Smith's Test batting average? [follow-up] how does it compare to Kohli's?",
+    "answer": "Steven Smith's batting average in Test is 56.06; Virat Kohli's is 46.85.",
+    "expected_contains": [
+      "Smith",
+      "Kohli"
+    ],
+    "checks": {
+      "Smith": true,
+      "Kohli": true
+    },
+    "passed": true,
+    "elapsed_s": 7.7,
+    "notes": "Tests comparison follow-up — system should answer from career data of both players"
+  },
+  {
+    "id": "X036",
+    "difficulty": "hard",
+    "category": "conversational_followup",
+    "question": "How did Australia do in the 2023 World Cup final? [follow-up] who was the top scorer?",
+    "answer": "The top scorer in that match was Travis Head with 137 runs for Australia against India.",
+    "expected_contains": [
+      "Head",
+      "137"
+    ],
+    "checks": {
+      "Head": true,
+      "137": true
+    },
+    "passed": true,
+    "elapsed_s": 7.7,
+    "notes": "Tests match narrative + follow-up for top scorer — match_id 1384439"
+  },
+  {
+    "id": "E001",
+    "difficulty": "hard",
+    "category": "edge_case",
+    "question": "How many overseas centuries has Virat Kohli scored?",
+    "answer": "I don't have that breakdown in the current dataset.",
+    "expected_contains": [
+      "don't have",
+      "breakdown",
+      "dataset"
+    ],
+    "checks": {
+      "don't have": true,
+      "breakdown": true,
+      "dataset": true
+    },
+    "passed": true,
+    "elapsed_s": 1.5,
+    "notes": "Home/away splits are not available — system should say so honestly"
+  },
+  {
+    "id": "E002",
+    "difficulty": "hard",
+    "category": "edge_case",
+    "question": "What is Sachin Tendulkar's ODI batting average?",
+    "answer": "Sachin Tendulkar's batting average in ODI is 47.65 (6433 runs).",
+    "expected_contains": [
+      "Tendulkar"
+    ],
+    "checks": {
+      "Tendulkar": true
+    },
+    "passed": true,
+    "elapsed_s": 1.7,
+    "notes": "Dataset has only 144 ODI innings for Tendulkar (partial) — actual career was 463 innings. System should answer from available data."
+  },
+  {
+    "id": "E003",
+    "difficulty": "medium",
+    "category": "edge_case",
+    "question": "woh dismissed kohli in 2011 world cup final?",
+    "answer": "Virat Kohli was caught and bowled by Tillakaratne Dilshan in over 21 (India vs Sri Lanka, 2011-04-02).",
+    "expected_contains": [
+      "Dilshan"
+    ],
+    "checks": {
+      "Dilshan": true
+    },
+    "passed": true,
+    "elapsed_s": 3.7,
+    "notes": "Tests typo/informal language handling — 'woh' is informal for 'who'"
+  },
+  {
+    "id": "E004",
+    "difficulty": "medium",
+    "category": "edge_case",
+    "question": "kohli ka batting average kya hai?",
+    "answer": "Virat Kohli's batting average is 48.93 (36896 runs).",
+    "expected_contains": [
+      "48.93"
+    ],
+    "checks": {
+      "48.93": true
+    },
+    "passed": true,
+    "elapsed_s": 2.3,
+    "notes": "Tests Hindi language input — LLM should understand and answer"
+  },
+  {
+    "id": "E005",
+    "difficulty": "easy",
+    "category": "edge_case",
+    "question": "Who is the best batsman ever?",
+    "answer": "There is no single objective best batsman ever; it is subjective and depends on format, era, conditions, and whether you value peak or longevity.",
+    "expected_contains": [
+      "subjective",
+      "no single"
+    ],
+    "checks": {
+      "subjective": true,
+      "no single": true
+    },
+    "passed": true,
+    "elapsed_s": 0.0,
+    "notes": "Subjective question — system should not hallucinate a definitive answer"
+  },
+  {
+    "id": "X039",
+    "difficulty": "hard",
+    "category": "edge_case",
+    "question": "What is Virat Kohli's batting average in overseas Tests?",
+    "answer": "I don't have that breakdown in the current dataset.",
+    "expected_contains": [
+      "don't have",
+      "breakdown"
+    ],
+    "checks": {
+      "don't have": true,
+      "breakdown": true
+    },
+    "passed": true,
+    "elapsed_s": 1.6,
+    "notes": "Home/away splits not available — system must say so honestly"
+  },
+  {
+    "id": "X040",
+    "difficulty": "hard",
+    "category": "edge_case",
+    "question": "How many runs did Kohli score in the 2011 World Cup?",
+    "answer": "Virat Kohli scored 282 runs in the 2011 ICC Cricket World Cup.",
+    "expected_contains": [
+      "282"
+    ],
+    "checks": {
+      "282": true
+    },
+    "passed": true,
+    "elapsed_s": 3.8,
+    "notes": "Requires summing across multiple matches in the same event — tests multi-match aggregation"
+  },
+  {
+    "id": "X041",
+    "difficulty": "hard",
+    "category": "edge_case",
+    "question": "virat kohli ka sabse acha test year kaunsa tha?",
+    "answer": "Virat Kohli's best year by runs in Test was 2018 with 1322 runs.",
+    "expected_contains": [
+      "2018",
+      "1322"
+    ],
+    "checks": {
+      "2018": true,
+      "1322": true
+    },
+    "passed": true,
+    "elapsed_s": 2.1,
+    "notes": "Hindi question — LLM should understand and route to career stats"
+  }
+]

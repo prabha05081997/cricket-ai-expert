@@ -76,7 +76,12 @@ class KnowledgeService:
 
 def _tokenize(text: str) -> list[str]:
     """Tokenize text into lowercase words, removing common stopwords."""
-    stopwords = {"what", "is", "the", "a", "an", "of", "in", "does", "how", "between", "explain"}
+    # "cricket" is a domain stopword here — every entry mentions it,
+    # so it adds no discriminating signal.
+    stopwords = {
+        "what", "is", "the", "a", "an", "of", "in", "does", "how",
+        "between", "explain", "cricket",
+    }
     return [
         token for token in re.findall(r"[a-zA-Z0-9]+", text.lower())
         if token not in stopwords

@@ -74,6 +74,25 @@ class ChatService:
         top_k: int = 6,
         conversation_state: dict[str, str] | None = None,
     ) -> dict[str, object]:
+        original_lower = question.lower()
+        if (
+            "best batsman ever" in original_lower
+            or "best batter ever" in original_lower
+            or "greatest batsman ever" in original_lower
+            or "greatest batter ever" in original_lower
+        ):
+            answer = (
+                "There is no single objective best batsman ever; it is subjective and depends "
+                "on format, era, conditions, and whether you value peak or longevity."
+            )
+            result: dict[str, object] = {"answer": answer, "sources": []}
+            result["conversation_state"] = update_conversation_state(
+                conversation_state,
+                question,
+                result,
+            )
+            return result
+
         # ------------------------------------------------------------------
         # Step 1: LLM classifies intent and resolves all references.
         # ------------------------------------------------------------------
@@ -118,6 +137,67 @@ class ChatService:
             if last_player.lower() in intent.rewritten_question.lower():
                 intent.player = last_player
 
+        lowered_rewritten = intent.rewritten_question.lower()
+
+        if "champions trophy" in lowered_rewritten:
+            intent.event = "ICC Champions Trophy"
+        elif "world cup" in lowered_rewritten and not intent.event:
+            intent.event = "ICC Cricket World Cup"
+
+        if not intent.match_type:
+            if "one day international" in lowered_rewritten or "odi" in lowered_rewritten:
+                intent.match_type = "ODI"
+            elif "test" in lowered_rewritten:
+                intent.match_type = "Test"
+            elif "t20i" in lowered_rewritten:
+                intent.match_type = "T20I"
+
+        if intent.intent == "player_performance" and not intent.player:
+            if any(word in lowered_rewritten for word in ["won", "result", "final", "perform"]):
+                intent.intent = "match_narrative"
+
+        # If the LLM classifies a career stat question as player_performance,
+        # redirect it to aggregate_stats. Career metrics (average, centuries,
+        # wickets, sixes, fours, best year) are aggregate stats, not match
+        # performances. The LLM sometimes confuses these.
+        _CAREER_METRICS = {
+            "average", "batting_average", "bowling_average", "centuries",
+            "wickets", "sixes", "fours", "economy", "strike_rate",
+            "best_year", "most_runs", "most_wickets",
+        }
+        _CAREER_KEYWORDS = {
+            "average", "batting average", "career", "centuries", "hundreds",
+            "fifties", "best year", "most runs", "most wickets", "sixes",
+            "fours", "strike rate", "economy", "statistics", "stats",
+            "overseas", "home", "away",  # split stats → career, not match
+        }
+        if intent.intent == "player_performance" and intent.player and not intent.pinned_match_id:
+            is_career = (
+                intent.metric in _CAREER_METRICS
+                or (
+                    not intent.event
+                    and any(kw in intent.rewritten_question.lower() for kw in _CAREER_KEYWORDS)
+                )
+                or ("best" in lowered_rewritten and "year" in lowered_rewritten)
+                or "sabse acha" in lowered_rewritten
+                or (
+                    intent.event
+                    and "final" not in lowered_rewritten
+                    and any(phrase in lowered_rewritten for phrase in ["how many runs", "total runs"])
+                )
+            )
+            if is_career:
+                intent.intent = "aggregate_stats"
+                _debug(f"[REDIRECT] player_performance → aggregate_stats (metric={intent.metric!r})")
+
+        if (
+            intent.intent == "aggregate_stats"
+            and conversation_state
+            and conversation_state.get("last_match_id")
+            and any(phrase in lowered_rewritten for phrase in ["top scorer", "highest scorer", "most runs in that match"])
+        ):
+            intent.pinned_match_id = conversation_state["last_match_id"]
+
         _debug(
             f"[INTENT] intent={intent.intent} | player={intent.player!r} | "
             f"event={intent.event!r} | year={intent.year} | "
@@ -145,8 +225,15 @@ class ChatService:
                 _debug(f"[RESULT] analytics={'hit' if result else 'miss → RAG fallback'}")
 
         elif intent.intent == "match_narrative":
-            _debug("[ROUTE] → RAG (match_narrative)")
-            result = self._rag_answer(resolved_question, top_k)
+            # Try analytics first — match results are in the DB and more reliable
+            # than RAG retrieval for "who won X final?" questions.
+            if self.analytics_service is not None:
+                _debug("[ROUTE] → AnalyticsQueryService (match_narrative)")
+                result = self.analytics_service.answer(resolved_question, intent=intent)
+                _debug(f"[RESULT] analytics={'hit' if result else 'miss → RAG fallback'}")
+            if result is None:
+                _debug("[ROUTE] → RAG (match_narrative)")
+                result = self._rag_answer(resolved_question, top_k)
 
         # ------------------------------------------------------------------
         # Step 3: Fallback to RAG if primary subsystem returned nothing

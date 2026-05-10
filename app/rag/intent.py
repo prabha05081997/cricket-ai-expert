@@ -92,13 +92,13 @@ return the match_id of the single best matching match.
 
 User question: {question}
 
-Candidate matches (match_id | date | teams | event):
+Candidate matches (sorted oldest to newest — match_id | date | teams | event):
 {candidates}
 
 Rules:
-- The final of a tournament is the LAST match by date.
-- A semi-final is the second-to-last group of matches.
-- If the question mentions "final", pick the match with the latest date.
+- Matches are listed oldest first. The LAST entry is the most recent match.
+- The FINAL of a tournament is always the LAST match (most recent date). Pick the last entry if the question asks about a final.
+- A semi-final is the second-to-last match.
 - If the question mentions specific teams, prefer matches involving those teams.
 - Return ONLY a JSON object: {{"match_id": "<id>"}}
 - Output ONLY the JSON object. No explanation.
