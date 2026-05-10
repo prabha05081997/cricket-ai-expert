@@ -217,12 +217,16 @@ class ChatService:
             _debug("[ROUTE] → KnowledgeService")
             result = self.knowledge_service.answer(resolved_question)
             _debug(f"[RESULT] knowledge={'hit' if result else 'miss'}")
+            if result is not None:
+                result["answer_type"] = "knowledge"
 
         elif intent.intent in {"player_performance", "player_dismissal", "aggregate_stats"}:
             if self.analytics_service is not None:
                 _debug(f"[ROUTE] → AnalyticsQueryService ({intent.intent})")
                 result = self.analytics_service.answer(resolved_question, intent=intent)
                 _debug(f"[RESULT] analytics={'hit' if result else 'miss → RAG fallback'}")
+                if result is not None:
+                    result["answer_type"] = "analytics"
 
         elif intent.intent == "match_narrative":
             # Try analytics first — match results are in the DB and more reliable
@@ -231,16 +235,20 @@ class ChatService:
                 _debug("[ROUTE] → AnalyticsQueryService (match_narrative)")
                 result = self.analytics_service.answer(resolved_question, intent=intent)
                 _debug(f"[RESULT] analytics={'hit' if result else 'miss → RAG fallback'}")
+                if result is not None:
+                    result["answer_type"] = "analytics"
             if result is None:
                 _debug("[ROUTE] → RAG (match_narrative)")
-                result = self._rag_answer(resolved_question, top_k)
+                result = self._rag_answer(resolved_question, top_k, route="match_narrative")
+                result["answer_type"] = "match_narrative_rag"
 
         # ------------------------------------------------------------------
         # Step 3: Fallback to RAG if primary subsystem returned nothing
         # ------------------------------------------------------------------
         if result is None:
             _debug("[ROUTE] → RAG (fallback)")
-            result = self._rag_answer(resolved_question, top_k)
+            result = self._rag_answer(resolved_question, top_k, route="rag_fallback")
+            result["answer_type"] = "rag_fallback"
 
         # ------------------------------------------------------------------
         # Step 4: Update conversation state and return
@@ -256,7 +264,7 @@ class ChatService:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _rag_answer(self, question: str, top_k: int) -> dict[str, object]:
+    def _rag_answer(self, question: str, top_k: int, route: str = "rag") -> dict[str, object]:
         retrieved = self.index.retrieve(question, top_k=top_k)
         sources = [
             {
@@ -268,7 +276,7 @@ class ChatService:
             for chunk in retrieved
         ]
         answer = (
-            self.llm_client.generate_answer(question, sources)
+            self.llm_client.generate_answer(question, sources, route=route)
             if sources
             else "I could not find supporting CricSheet context for that question yet."
         )
