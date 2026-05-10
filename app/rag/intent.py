@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 INTENT_SCHEMA = """
 {
-  "intent": "<one of: player_performance | player_dismissal | aggregate_stats | match_narrative | cricket_knowledge | general_chat>",
+  "intent": "<one of: player_performance | player_dismissal | aggregate_stats | match_narrative | cricket_knowledge | mixed | general_chat>",
   "player": "<full player name if mentioned or resolved from context, else null>",
   "player2": "<second player name if the question compares two players, else null>",
   "match_type": "<cricket FORMAT code only: ODI | Test | T20I | T20 | null — NOT a tournament name>",
@@ -71,6 +71,8 @@ EXAMPLES:
 - "who dismissed him?" → player_dismissal
 - "who won the 2019 World Cup?" → match_narrative
 - "what is DLS?" → cricket_knowledge
+- "How does Kohli's WC record compare to Sachin's?" → mixed
+- "Is a strike rate of 140 good in T20Is?" → mixed
 
 Given a user question and optional conversation context, output ONLY a valid JSON object matching this schema:
 {schema}
@@ -334,6 +336,8 @@ def _fallback_intent(
         intent = "player_performance"
     elif any(w in lowered for w in ["most", "highest", "best", "record", "most runs", "most wickets"]):
         intent = "aggregate_stats"
+    elif any(w in lowered for w in ["compare", "better than", "as good as", "versus", " vs ", "compare to"]):
+        intent = "mixed"
     elif any(w in lowered for w in ["what is", "explain", "what does", "how does", "difference between"]):
         intent = "cricket_knowledge"
     elif any(w in lowered for w in ["who won", "what happened", "result", "match"]):

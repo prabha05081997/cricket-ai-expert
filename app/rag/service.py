@@ -228,6 +228,18 @@ class ChatService:
                 if result is not None:
                     result["answer_type"] = "analytics"
 
+        elif intent.intent == "mixed":
+            if self.analytics_service is not None:
+                _debug("[ROUTE] → AnalyticsQueryService (mixed)")
+                result = self.analytics_service.answer(resolved_question, intent=intent)
+                _debug(f"[RESULT] analytics={'hit' if result else 'miss → RAG fallback'}")
+                if result is not None:
+                    result["answer_type"] = "mixed"
+            if result is None:
+                _debug("[ROUTE] → RAG (mixed)")
+                result = self._rag_answer(resolved_question, top_k, route="mixed")
+                result["answer_type"] = "mixed_rag"
+
         elif intent.intent == "match_narrative":
             # Try analytics first — match results are in the DB and more reliable
             # than RAG retrieval for "who won X final?" questions.

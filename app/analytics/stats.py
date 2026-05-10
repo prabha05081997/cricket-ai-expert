@@ -87,6 +87,11 @@ class AnalyticsQueryService:
                 if intent.intent == "match_narrative":
                     return self._answer_match_narrative(connection, intent)
 
+                if intent.intent == "mixed":
+                    mixed = self._answer_mixed_question(connection, question, intent)
+                    if mixed is not None:
+                        return mixed
+
                 if intent.intent == "aggregate_stats":
                     # Career stats for a specific player — check before leaderboards
                     if intent.player:
@@ -178,6 +183,93 @@ class AnalyticsQueryService:
             return synthesised if synthesised else str(career_result.get("answer", ""))
         except Exception:
             return str(career_result.get("answer", ""))
+
+    def _answer_mixed_question(
+        self,
+        connection: sqlite3.Connection,
+        question: str,
+        intent: IntentResult,
+    ) -> dict[str, object] | None:
+        if intent.player and intent.player2:
+            return self._answer_player_comparison(connection, question, intent)
+        return None
+
+    def _answer_player_comparison(
+        self,
+        connection: sqlite3.Connection,
+        question: str,
+        intent: IntentResult,
+    ) -> dict[str, object] | None:
+        left_query = PlayerCareerQuery(
+            player_name=intent.player,
+            match_type=intent.match_type,
+            year=intent.year,
+            event_name=intent.event,
+        )
+        right_query = PlayerCareerQuery(
+            player_name=intent.player2,
+            match_type=intent.match_type,
+            year=intent.year,
+            event_name=intent.event,
+        )
+
+        left_result = _answer_career_query(connection, left_query)
+        right_result = _answer_career_query(connection, right_query)
+
+        if left_result is None or right_result is None:
+            return None
+
+        answer = self._synthesise_comparison_answer(
+            question,
+            left_result,
+            right_result,
+        )
+
+        return {
+            "answer": answer,
+            "sources": left_result.get("sources", []) + right_result.get("sources", []),
+        }
+
+    def _synthesise_comparison_answer(
+        self,
+        question: str,
+        left_result: dict[str, object],
+        right_result: dict[str, object],
+    ) -> str:
+        import httpx
+
+        left_text = str(left_result.get("sources", [])[0].get("text", ""))
+        right_text = str(right_result.get("sources", [])[0].get("text", ""))
+
+        prompt = (
+            "You are a cricket analyst. Compare the two fact sheets below and answer the question directly.\n"
+            "Focus on the comparison request and mention both players by name.\n"
+            "Do not invent numbers or conclusions not supported by the fact sheets.\n"
+            "If the answer cannot be determined from the provided data, say:\n"
+            "\"I don't have enough information in the current context to answer that.\"\n\n"
+            f"Question: {question}\n\n"
+            f"Player 1 fact sheet:\n{left_text}\n\n"
+            f"Player 2 fact sheet:\n{right_text}\n"
+        )
+
+        if not self._ollama_base_url:
+            return f"{left_result.get('answer', '')}\n\n{right_result.get('answer', '')}"
+
+        try:
+            response = httpx.post(
+                f"{self._ollama_base_url.rstrip('/')}/api/generate",
+                json={
+                    "model": self._ollama_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {"temperature": 0},
+                },
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            return str(response.json().get("response", "")).strip() or f"{left_result.get('answer', '')}\n\n{right_result.get('answer', '')}"
+        except Exception:
+            return f"{left_result.get('answer', '')}\n\n{right_result.get('answer', '')}"
 
     def _answer_match_narrative(
         self,

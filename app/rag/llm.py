@@ -61,6 +61,17 @@ class OllamaClient:
                 f"Context:\n{context_text}\n"
             )
 
+        if route == "mixed":
+            return (
+                "You are a cricket analyst. Compare the provided sources and answer the question directly.\n"
+                "Focus on the requested comparison or synthesis and mention both subjects clearly.\n"
+                "Do not invent statistics or perform math not supported by the fact sheets.\n"
+                "If the answer cannot be determined from the sources, say:\n"
+                "\"I don't have enough information in the current context to answer that.\"\n\n"
+                f"Question:\n{question}\n\n"
+                f"Sources:\n{context_text}\n"
+            )
+
         # Default to a conservative RAG prompt for match and fallback answers.
         return (
             "You are a cricket expert assistant grounded strictly in the provided context.\n\n"

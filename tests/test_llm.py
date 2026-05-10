@@ -71,3 +71,23 @@ def test_generate_answer_uses_analytics_prompt(monkeypatch):
     assert result == "analytics answer"
     assert "cricket stats assistant" in captured["prompt"]
     assert "Answer the question using only the provided fact sheet." in captured["prompt"]
+
+
+def test_generate_answer_uses_mixed_prompt(monkeypatch):
+    captured: dict[str, str] = {}
+
+    def fake_post(url: str, json: dict, timeout: float):
+        captured["prompt"] = json["prompt"]
+        return DummyResponse("mixed answer")
+
+    monkeypatch.setattr("app.rag.llm.httpx.post", fake_post)
+    client = OllamaClient("http://localhost", "test-model")
+    result = client.generate_answer(
+        "How does Kohli's WC record compare to Sachin's?",
+        [{"title": "Player 1 stats", "text": "Kohli has 45 average."}, {"title": "Player 2 stats", "text": "Sachin has 44 average."}],
+        route="mixed",
+    )
+
+    assert result == "mixed answer"
+    assert "cricket analyst" in captured["prompt"]
+    assert "Compare the provided sources" in captured["prompt"]
