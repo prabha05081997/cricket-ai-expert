@@ -115,5 +115,103 @@ KNOWLEDGE_ITEMS = [
             "and the team with the higher score in that over wins, subject to competition playing conditions."
         ),
     },
+    {
+        "id": "world_cup",
+        "title": "Cricket World Cup format",
+        "topics": ["world cup", "icc world cup", "50 overs", "tournament format"],
+        "content": (
+            "The Cricket World Cup is a 50-over international tournament held roughly every four years. "
+            "Teams play a group stage followed by knockout matches. The format often includes round-robin or Super 8/10 stages before semifinals and a final."
+        ),
+    },
+    {
+        "id": "ipl",
+        "title": "Indian Premier League (IPL)",
+        "topics": ["ipl", "indian premier league", "t20 league", "auction"],
+        "content": (
+            "The IPL is a Twenty20 franchise league in India featuring a league stage and playoffs. "
+            "Each team plays the others in a round-robin phase, then the top teams advance to qualifiers, an eliminator, and the final. "
+            "The league combines international stars with domestic talent and uses a player auction for squad assembly."
+        ),
+    },
+    {
+        "id": "ashes",
+        "title": "The Ashes series",
+        "topics": ["ashes", "test rivalry", "england vs australia", "test series"],
+        "content": (
+            "The Ashes is a Test series played between England and Australia. It usually consists of five Test matches, with the winner earning the Ashes urn. "
+            "The series alternates between host countries and is one of cricket's oldest and most storied rivalries."
+        ),
+    },
+    {
+        "id": "bbl",
+        "title": "Big Bash League (BBL)",
+        "topics": ["bbl", "big bash league", "australia", "t20 league"],
+        "content": (
+            "The Big Bash League is Australia's domestic Twenty20 competition. It features city-based franchises and a short league stage followed by finals, emphasizing big-hitting batting and aggressive bowling."
+        ),
+    },
+    {
+        "id": "psl",
+        "title": "Pakistan Super League (PSL)",
+        "topics": ["psl", "pakistan super league", "t20 league", "pakistan"],
+        "content": (
+            "The PSL is Pakistan's top Twenty20 franchise competition. It uses a double round-robin group stage before playoffs, and it has become a key platform for local and international T20 players."
+        ),
+    },
+    {
+        "id": "first_test_match",
+        "title": "First Test match",
+        "topics": ["first test", "test history", "cricket first test", "match history"],
+        "content": (
+            "The first officially recognised Test match was played between Australia and England in 1877. "
+            "It took place in Melbourne and helped establish Test cricket as the premier format for international rivalry and technical challenge."
+        ),
+    },
+    {
+        "id": "highest_team_total",
+        "title": "Highest team total in cricket",
+        "topics": ["highest team total", "record score", "team score", "high score"],
+        "content": (
+            "The highest team totals in cricket are often recorded in limited-overs matches where batting conditions are favorable. "
+            "These landmark scores reflect powerful batting performances and the evolving nature of modern cricket scoring."
+        ),
+    },
+    {
+        "id": "virat_kohli",
+        "title": "Profile: Virat Kohli",
+        "topics": ["virat kohli", "kohli", "indian cricketer", "batting legend"],
+        "content": (
+            "Virat Kohli is one of modern cricket's most prolific run scorers. "
+            "Known for his aggressive batting, consistency across formats, and high chase records, he has been a pillar of India's top order in Tests, ODIs, and T20 internationals."
+        ),
+    },
+    {
+        "id": "sachin_tendulkar",
+        "title": "Profile: Sachin Tendulkar",
+        "topics": ["sachin tendulkar", "tendulkar", "master blaster", "batting legend"],
+        "content": (
+            "Sachin Tendulkar is widely regarded as one of cricket's greatest batsmen. "
+            "He holds numerous batting records, including the most international centuries, and was celebrated for his technique, longevity, and ability to perform under pressure."
+        ),
+    },
+    {
+        "id": "ms_dhoni",
+        "title": "Profile: MS Dhoni",
+        "topics": ["ms dhoni", "dhoni", "captain cool", "wicketkeeper"],
+        "content": (
+            "MS Dhoni is known as one of cricket's greatest finishers and captains. "
+            "He led India to the 2007 T20 World Cup, 2011 ODI World Cup, and 2013 Champions Trophy, and was valued for his calm leadership and match-winning batting at the end of an innings."
+        ),
+    },
+    {
+        "id": "don_bradman",
+        "title": "Profile: Sir Donald Bradman",
+        "topics": ["donald bradman", "bradman", "test average", "cricket legend"],
+        "content": (
+            "Sir Donald Bradman is widely regarded as the greatest batsman in cricket history. "
+            "He finished his Test career with an average of 99.94, a record that remains unmatched and symbolizes extraordinary dominance in the game's longest format."
+        ),
+    },
 ]
 

@@ -1,5 +1,90 @@
 # Project Plan: Local-First Cricket Expert Assistant
 
+## Current Status (as of May 2026)
+
+Phases 1–5 are complete. The system now has:
+
+- LLM-based intent classification and routing (`qwen2.5:7b` for classification, `qwen2.5:14b` for answers)
+- Structured analytics engine (batting, bowling, dismissals — 406k+ batting rows, 283k+ bowling rows, 334k+ dismissal records)
+- Player identity and alias resolution
+- Conversation memory with `last_match_id` pinning for follow-up queries
+- Cricket knowledge base for rules and terminology
+- Hybrid RAG (ChromaDB vector + SQLite keyword) for match narrative questions
+- Ingest pipeline with progress reporting (`python -m app.ingest update`)
+
+### Current Analytics Coverage
+
+Supported query types:
+
+- Highest individual score (with format/year/venue filters)
+- Most runs (aggregate, with filters)
+- Most wickets (aggregate, with filters)
+- Player-in-match performance
+- Dismissal records
+
+**Not yet supported** (next priority):
+
+- Batting average, strike rate leaderboards
+- Best bowling figures in an innings
+- Player career stats (total runs, matches, centuries, average)
+- Head-to-head team records
+- Venue-specific stats
+- Economy rate / bowling average leaderboards
+- Top-N queries (top 5 run scorers, etc.)
+
+---
+
+## Next Build Phases
+
+### Phase A: Expanded Analytics Queries ← **current**
+
+Add these query types to `AnalyticsQueryService`:
+
+1. **Batting average** — `SUM(runs) / COUNT(dismissals)` joined with dismissals table
+2. **Best bowling figures** — single-innings wicket/runs record
+3. **Player career stats** — matches, runs, average, SR, centuries, fifties for a player
+4. **Head-to-head** — win/loss record between two teams
+5. **Venue stats** — most runs / wickets at a specific ground
+6. **Economy / bowling average** — bowling leaderboards beyond just wickets
+7. **Top-N queries** — "top 5 run scorers in T20Is in 2023"
+
+Also expand the `IntentResult` metric vocabulary so the LLM can signal these.
+
+### Phase B: Route-Specific Answer Prompts
+
+The LLM currently uses one generic prompt for all answers. Add route-aware prompts:
+
+- analytics answers: terse, factual, no padding
+- RAG/narrative answers: conversational, commentator style
+- knowledge answers: explanatory, structured
+- when RAG is a fallback (analytics returned None): more cautious, flag uncertainty
+
+### Phase C: Evaluation Harness
+
+Build a benchmark of 80–100 questions with known correct answers, one per intent category. Run it as `python -m app.eval run`. This is the only way to know if changes improve or regress quality.
+
+### Phase D: Knowledge Base Expansion
+
+Expand the static knowledge base to cover:
+
+- All major cricket laws (LBW, no-ball, wide, free hit, super over, Duckworth-Lewis)
+- Tournament formats (World Cup, IPL, Ashes, BBL, PSL)
+- Historical landmarks (first Test, highest team totals, famous matches)
+- Player profiles for iconic players (career summaries)
+
+### Phase E: Mixed / Comparison Questions
+
+Handle questions like "How does Kohli's WC record compare to Sachin's?" or "Is a strike rate of 140 good in T20Is?" These need a `mixed` intent that fetches from multiple subsystems and synthesises.
+
+### Phase F: UI Polish
+
+- Answer type badge (Stats / Match / Rules / From Index)
+- Confidence indicator (analytics hit vs RAG guess)
+- Suggested follow-up questions
+- Rewritten question visible in debug mode
+
+---
+
 ## 1. Project Goal
 
 Build a chat application that feels like a real cricket expert, not a generic chatbot.

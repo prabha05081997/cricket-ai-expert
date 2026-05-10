@@ -363,4 +363,12 @@ def _display_name_score(alias: str, alias_type: str) -> int:
         "first_name": 10,
         "initials_compact": 0,
     }.get(alias_type, 0)
-    return alias_type_bonus + (word_count * 10) + base
+    score = alias_type_bonus + (word_count * 10) + base
+
+    # Prefer full public names over scorecard-style initials when both are
+    # available. This keeps "Shakib Al Hasan" ahead of "S Al Hasan", while
+    # still allowing external names like "Rohit Sharma" to beat "RG Sharma".
+    first = normalized.split()[0]
+    if len(first) == 1:
+        score -= 80
+    return score

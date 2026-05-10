@@ -70,6 +70,7 @@ def _normalize_innings(innings_entry: dict[str, Any]) -> dict[str, Any]:
     batting: dict[str, dict[str, Any]] = {}
     bowling: dict[str, dict[str, Any]] = {}
     wicket_events: list[str] = []
+    dismissals: list[dict[str, Any]] = []
 
     for over in overs:
         over_number = over.get("over")
@@ -106,9 +107,24 @@ def _normalize_innings(innings_entry: dict[str, Any]) -> dict[str, Any]:
                 wickets += 1
                 player_out = wicket.get("player_out", "unknown batter")
                 kind = wicket.get("kind", "dismissed")
-                wicket_events.append(f"Over {over_number}: {player_out} {kind}")
-                if bowler and kind not in {"run out", "retired hurt", "retired out", "obstructing the field"}:
-                    bowling[bowler]["wickets"] += 1
+                fielders = [
+                    f.get("name", "") for f in (wicket.get("fielders") or []) if f.get("name")
+                ]
+                fielder_str = f" ({', '.join(fielders)})" if fielders else ""
+                credited_bowler = bowler if kind not in {
+                    "run out", "retired hurt", "retired out", "obstructing the field"
+                } else None
+                if credited_bowler:
+                    wicket_events.append(f"Over {over_number}: {player_out} {kind} b {credited_bowler}{fielder_str}")
+                    bowling[credited_bowler]["wickets"] += 1
+                else:
+                    wicket_events.append(f"Over {over_number}: {player_out} {kind}{fielder_str}")
+                dismissals.append({
+                    "batter": player_out,
+                    "bowler": credited_bowler,
+                    "kind": kind,
+                    "over": over_number,
+                })
 
     return {
         "team": team,
@@ -117,6 +133,7 @@ def _normalize_innings(innings_entry: dict[str, Any]) -> dict[str, Any]:
         "batting": sorted(batting.values(), key=lambda item: (-item["runs"], item["player"])),
         "bowling": sorted(bowling.values(), key=lambda item: (-item["wickets"], item["player"])),
         "wicket_events": wicket_events[:12],
+        "dismissals": dismissals,
     }
 
 

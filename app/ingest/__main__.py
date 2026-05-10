@@ -12,22 +12,14 @@ cli = typer.Typer(help="Ingest CricSheet data into the local cricket expert know
 def update() -> None:
     settings = get_settings()
     pipeline = IngestionPipeline(settings)
-    result = pipeline.update()
-    typer.echo(
-        f"Update complete: seen={result['seen']} indexed={result['indexed']} "
-        f"skipped={result['skipped']} failed={result['failed']}"
-    )
+    pipeline.update()
 
 
 @cli.command()
 def rebuild() -> None:
     settings = get_settings()
     pipeline = IngestionPipeline(settings)
-    result = pipeline.rebuild()
-    typer.echo(
-        f"Rebuild complete: seen={result['seen']} indexed={result['indexed']} "
-        f"skipped={result['skipped']} failed={result['failed']}"
-    )
+    pipeline.rebuild()
 
 
 if __name__ == "__main__":
